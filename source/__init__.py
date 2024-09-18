@@ -34,6 +34,8 @@ from bpy.props import (
         EnumProperty,
         )
 
+from .measureit_sum_edge_lengths import *
+
 # --------------------------------------------------------------
 # Register all operators and panels
 # --------------------------------------------------------------
@@ -389,6 +391,9 @@ def register():
     # register internal property
     wm.measureit_run_opengl = BoolProperty(default=False)
 
+    #Register Sum Edge Lengths
+    bpy.utils.register_class(Sum_Edge_Lengths)
+    bpy.types.VIEW3D_MT_edit_mesh_edges.append(measureit_sum_edge_lengths.menu_func)
 
 def unregister():
     from bpy.utils import unregister_class
@@ -460,6 +465,9 @@ def unregister():
     if p in wm:
         del wm[p]
 
+    #Remove Sum Edge Lengths
+    bpy.utils.unregister_class(Sum_Edge_Lengths)
+    bpy.types.VIEW3D_MT_edit_mesh_edges.remove(measureit_sum_edge_lengths.menu_func)
 
 if __name__ == '__main__':
     register()
