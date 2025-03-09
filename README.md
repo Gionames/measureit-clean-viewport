@@ -5,7 +5,7 @@ This add-on was part of [Blender 4.1 bundled add-ons](https://docs.blender.org/m
 To build a new version of the extension:
 * `<path_to_blender> -c extension build --source-dir=./source`
 
-For more information about building extensions refer to the [documentation](https://docs.blender.org/manual/en/dev/extensions/getting_started.html).
+For more information about building extensions refer to the [documentation](https://docs.blender.org/manual/en/4.4/advanced/extensions/getting_started.html).
 
 ---
 
