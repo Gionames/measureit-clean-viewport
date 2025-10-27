@@ -45,7 +45,6 @@ def save_handler(dummy):
         print("MeasureIt: Cleaning data")
         objlist = bpy.context.scene.objects
         for myobj in objlist:
-            mainobject
             if hasattr(myobj, "MeasureGenerator") and len(myobj.MeasureGenerator) > 0:
                 mp = myobj.MeasureGenerator[0]
                 x = 0
