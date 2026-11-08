@@ -163,10 +163,10 @@ class MeasureitProperties(PropertyGroup):
                          description="Include changes in Z axis for calculating the distance",
                          default=True)
     glfontx: IntProperty(name="glfontx",
-                          description="Change font position in X axis",
+                          description="Move the text along the dimension line (pixels at the reference zoom)",
                           default=0, min=-3000, max=3000)
     glfonty: IntProperty(name="glfonty",
-                          description="Change font position in Y axis",
+                          description="Move the text perpendicular to the dimension line (pixels at the reference zoom)",
                           default=0, min=-3000, max=3000)
     gldist: BoolProperty(name="gldist",
                           description="Display distance for this measure",
@@ -829,6 +829,7 @@ class MEASUREIT_OT_FontZoom(Operator):
             return {'CANCELLED'}
         if self.action == 'RESET' or scene.measureit_zoom_ref <= 0.0:
             scene.measureit_zoom_ref = rv3d.view_distance
+            scene.measureit_zoom_ref_rot = tuple(rv3d.view_rotation)
         if self.action == 'RESET':
             scene.measureit_font_offset = 0
         elif self.action == 'PLUS':

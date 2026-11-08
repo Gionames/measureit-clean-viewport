@@ -167,6 +167,11 @@ def register():
                                              description="View distance at which texts have their own size "
                                                          "(set automatically, see Reset zoom reference)",
                                              default=0.0)
+    Scene.measureit_zoom_ref_rot = FloatVectorProperty(name="Reference view rotation",
+                                                       description="View rotation at which the text offsets (X/Y) "
+                                                                   "are defined (set automatically, "
+                                                                   "see Reset zoom reference)",
+                                                       size=4, default=(0.0, 0.0, 0.0, 0.0))
     Scene.measureit_scale = BoolProperty(name="Scale",
                                          description="Use scale factor",
                                          default=False)
@@ -432,6 +437,7 @@ def unregister():
     del Scene.measureit_font_max
     del Scene.measureit_font_offset
     del Scene.measureit_zoom_ref
+    del Scene.measureit_zoom_ref_rot
     del Scene.measureit_scale
     del Scene.measureit_scale_factor
     del Scene.measureit_scale_color

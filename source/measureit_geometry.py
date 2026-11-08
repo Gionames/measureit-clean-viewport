@@ -13,7 +13,7 @@ import bpy
 import blf
 from blf import ROTATION
 from math import fabs, degrees, radians, sqrt, cos, sin, pi
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Quaternion
 from bmesh import from_edit_mesh
 from bpy_extras import view3d_utils, mesh_utils
 import bpy_extras.object_utils as object_utils
@@ -335,11 +335,10 @@ def draw_segments(context, myobj, op, region, rv3d):
                         # noinspection PyBroadException
                         try:
                             midpoint3d = interpolate3d(v1, v2, fabs(dist / 2))
-                            gap3d = (midpoint3d[0], midpoint3d[1], midpoint3d[2] + s / 2)
-                            tmp_point = get_2d_point(region, rv3d, gap3d)
-                            if tmp_point is None:
-                                pass
-                            txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
+                            txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms,
+                                                        Vector(v2) - Vector(v1), vn)
+                            if txtpoint2d is None:
+                                raise ValueError("text position not available")
                             # Scale
                             if scene.measureit_scale is True:
                                 dist = dist * scene.measureit_scale_factor
@@ -441,9 +440,8 @@ def draw_segments(context, myobj, op, region, rv3d):
                                     via = vna * ms.glspace
 
                                     gap3d = (b_p1[0] + via[0], b_p1[1] + via[1], b_p1[2] + via[2])
-                                    tmp_point = get_2d_point(region, rv3d, gap3d)
-                                    if tmp_point is not None:
-                                        txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
+                                    txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
+                                    if txtpoint2d is not None:
                                         draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang)
                                 # Radius
                                 if scene.measureit_gl_show_d is True and ms.gldist is True and \
@@ -457,9 +455,8 @@ def draw_segments(context, myobj, op, region, rv3d):
                             else:
                                 gap3d = (a_p1[0], a_p1[1], a_p1[2])
 
-                            tmp_point = get_2d_point(region, rv3d, gap3d)
-                            if tmp_point is not None:
-                                txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
+                            txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
+                            if txtpoint2d is not None:
                                 draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
                         except:
                             pass
@@ -471,9 +468,8 @@ def draw_segments(context, myobj, op, region, rv3d):
                         # noinspection PyBroadException
                         tx_dist = ms.gltxt
                         gap3d = (vn1[0], vn1[1], vn1[2])
-                        tmp_point = get_2d_point(region, rv3d, gap3d)
-                        if tmp_point is not None:
-                            txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
+                        txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
+                        if txtpoint2d is not None:
                             draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
 
                     # ------------------------------------
@@ -638,9 +634,8 @@ def draw_segments(context, myobj, op, region, rv3d):
                             if scene.measureit_gl_show_n is True and ms.glnames is True:
                                 msg += ms.gltxt
                             if scene.measureit_gl_show_d is True or scene.measureit_gl_show_n is True:
-                                tmp_point = get_2d_point(region, rv3d, midpoint3d)
-                                if tmp_point is not None:
-                                    txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
+                                txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms)
+                                if txtpoint2d is not None:
                                     # todo: swap ms.glcolorarea with ms.glcolor ?
                                     draw_text(myobj, txtpoint2d, msg, ms.glcolorarea, fsize, faln, fang)
 
@@ -753,11 +748,15 @@ def find_rv3d(context):
     return None
 
 
-def _capture_zoom_ref(scene_name, dist):
+def _capture_zoom_ref(scene_name, dist, rot):
     _zoom_ref_pending.discard(scene_name)
     sc = bpy.data.scenes.get(scene_name)
-    if sc is not None and sc.measureit_zoom_ref <= 0.0:
+    if sc is None:
+        return None
+    if sc.measureit_zoom_ref <= 0.0:
         sc.measureit_zoom_ref = dist
+    if not any(sc.measureit_zoom_ref_rot):
+        sc.measureit_zoom_ref_rot = rot
     return None
 
 
@@ -773,21 +772,74 @@ def get_zoom_ref(scene, rv3d):
     if dist <= 0.0:
         return None
     ref = scene.measureit_zoom_ref
-    if ref <= 0.0:
+    if ref <= 0.0 or not any(scene.measureit_zoom_ref_rot):
         name = scene.name
         if name not in _zoom_ref_pending:
             _zoom_ref_pending.add(name)
-            bpy.app.timers.register(lambda n=name, d=dist: _capture_zoom_ref(n, d),
+            rot = tuple(rv3d.view_rotation)
+            bpy.app.timers.register(lambda n=name, d=dist, r=rot: _capture_zoom_ref(n, d, r),
                                     first_interval=0.0)
-        return None
+        if ref <= 0.0:
+            return None
     return ref, dist
 
 
-def get_text_point(scene, rv3d, point2d, ms):
-    """2D text position: projected point plus the user offset, scaled with the viewport zoom."""
+def get_text_point(scene, region, rv3d, p3d, ms, tangent=None, normal=None):
+    """2D text position for the 3D anchor p3d, moved by the user offset (X/Y fields).
+
+    The offset is applied in 3D, so it rotates with the scene and follows the zoom:
+    X goes along `tangent` and Y along `normal` (dimension lines); without them the
+    axes of the view that was stored as reference are used. Returns None if p3d is not visible.
+    """
+    base = get_2d_point(region, rv3d, p3d)
+    if base is None:
+        return None
+    ox, oy = ms.glfontx, ms.glfonty
+    if ox == 0 and oy == 0:
+        return base[0], base[1]
     zr = get_zoom_ref(scene, rv3d)
     factor = zr[0] / zr[1] if zr else 1.0
-    return point2d[0] + ms.glfontx * factor, point2d[1] + ms.glfonty * factor
+    simple = (base[0] + ox * factor, base[1] + oy * factor)
+    # current view axes
+    if rv3d is not None:
+        rot = rv3d.view_rotation.to_matrix()
+    elif scene.camera is not None:
+        rot = scene.camera.matrix_world.to_3x3().normalized()
+    else:
+        return simple
+    right = rot @ Vector((1.0, 0.0, 0.0))
+    up = rot @ Vector((0.0, 1.0, 0.0))
+    # axes of the offset
+    t = None
+    if tangent is not None and normal is not None and tangent.length > 1e-9:
+        t = tangent.normalized()
+        n = normal - t * normal.dot(t)
+        if n.length > 1e-9:
+            n.normalize()
+        else:
+            t = None
+    if t is None:
+        qr = tuple(scene.measureit_zoom_ref_rot)
+        if any(qr):
+            rr = Quaternion(qr).to_matrix()
+            t = rr @ Vector((1.0, 0.0, 0.0))
+            n = rr @ Vector((0.0, 1.0, 0.0))
+        else:
+            t, n = right, up
+    # pixels per world unit at p3d
+    p3 = Vector(p3d)
+    eps = 0.01
+    pr = get_2d_point(region, rv3d, p3 + right * eps)
+    if pr is None:
+        return simple
+    s = sqrt((pr[0] - base[0]) ** 2 + (pr[1] - base[1]) ** 2) / eps
+    if s < 1e-9:
+        return simple
+    w = (t * ox + n * oy) * (factor / s)
+    p2 = get_2d_point(region, rv3d, p3 + w)
+    if p2 is None:
+        return simple
+    return p2[0], p2[1]
 
 
 def get_scaled_font_size(scene, rv3d, fsize):
