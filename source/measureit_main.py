@@ -351,6 +351,9 @@ class MEASUREIT_PT_Edit(Panel):
                 row = box.row()
                 row.prop(scene, 'measureit_hide_units', text="Hide measurement unit")
                 row.prop(scene, 'measureit_text_only', text="Text Only", toggle=True, icon="FONT_DATA")
+                row = box.row()
+                row.prop(scene, 'measureit_text_lock_zoom', text="Lock text offset to zoom", toggle=True,
+                         icon="ZOOM_ALL")
                 # Scale factor
                 row = box.row()
                 row.prop(scene, 'measureit_scale', text="Scale")

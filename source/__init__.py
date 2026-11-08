@@ -114,6 +114,23 @@ classes = (
 #    Measure_Pref,
 )
 
+def _text_lock_zoom_update(self, context):
+    """Store the current viewport zoom as reference when the text lock is enabled."""
+    if not self.measureit_text_lock_zoom:
+        return
+    rv3d = None
+    space = context.space_data
+    if space is not None and space.type == 'VIEW_3D':
+        rv3d = space.region_3d
+    elif context.screen is not None:
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                rv3d = area.spaces.active.region_3d
+                break
+    if rv3d is not None:
+        self.measureit_text_lock_ref = rv3d.view_distance
+
+
 def register():
     from bpy.utils import register_class
     for cls in classes:
@@ -152,6 +169,15 @@ def register():
     Scene.measureit_text_only = BoolProperty(name="Text Only",
                                              description="Show measurement values and names without lines or arrows",
                                              default=False)
+    Scene.measureit_text_lock_zoom = BoolProperty(name="Lock text offset to zoom",
+                                                  description="Scale the text offset (X/Y) with the viewport zoom, "
+                                                              "so texts keep their position relative to lines and areas. "
+                                                              "The zoom level when this is enabled is the reference",
+                                                  default=False,
+                                                  update=_text_lock_zoom_update)
+    Scene.measureit_text_lock_ref = FloatProperty(name="Text lock reference zoom",
+                                                  description="View distance stored when Lock text offset to zoom is enabled",
+                                                  default=0.0)
     Scene.measureit_scale = BoolProperty(name="Scale",
                                          description="Use scale factor",
                                          default=False)
@@ -413,6 +439,8 @@ def unregister():
     del Scene.measureit_gl_show_d
     del Scene.measureit_gl_show_n
     del Scene.measureit_text_only
+    del Scene.measureit_text_lock_zoom
+    del Scene.measureit_text_lock_ref
     del Scene.measureit_scale
     del Scene.measureit_scale_factor
     del Scene.measureit_scale_color

@@ -338,7 +338,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                             tmp_point = get_2d_point(region, rv3d, gap3d)
                             if tmp_point is None:
                                 pass
-                            txtpoint2d = tmp_point[0] + ms.glfontx, tmp_point[1] + ms.glfonty
+                            txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
                             # Scale
                             if scene.measureit_scale is True:
                                 dist = dist * scene.measureit_scale_factor
@@ -442,7 +442,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                                     gap3d = (b_p1[0] + via[0], b_p1[1] + via[1], b_p1[2] + via[2])
                                     tmp_point = get_2d_point(region, rv3d, gap3d)
                                     if tmp_point is not None:
-                                        txtpoint2d = tmp_point[0] + ms.glfontx, tmp_point[1] + ms.glfonty
+                                        txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
                                         draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang)
                                 # Radius
                                 if scene.measureit_gl_show_d is True and ms.gldist is True and \
@@ -458,7 +458,7 @@ def draw_segments(context, myobj, op, region, rv3d):
 
                             tmp_point = get_2d_point(region, rv3d, gap3d)
                             if tmp_point is not None:
-                                txtpoint2d = tmp_point[0] + ms.glfontx, tmp_point[1] + ms.glfonty
+                                txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
                                 draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
                         except:
                             pass
@@ -472,7 +472,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                         gap3d = (vn1[0], vn1[1], vn1[2])
                         tmp_point = get_2d_point(region, rv3d, gap3d)
                         if tmp_point is not None:
-                            txtpoint2d = tmp_point[0] + ms.glfontx, tmp_point[1] + ms.glfonty
+                            txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
                             draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
 
                     # ------------------------------------
@@ -639,7 +639,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                             if scene.measureit_gl_show_d is True or scene.measureit_gl_show_n is True:
                                 tmp_point = get_2d_point(region, rv3d, midpoint3d)
                                 if tmp_point is not None:
-                                    txtpoint2d = tmp_point[0] + ms.glfontx, tmp_point[1] + ms.glfonty
+                                    txtpoint2d = get_text_point(scene, rv3d, tmp_point, ms)
                                     # todo: swap ms.glcolorarea with ms.glcolor ?
                                     draw_text(myobj, txtpoint2d, msg, ms.glcolorarea, fsize, faln, fang)
 
@@ -737,6 +737,28 @@ def get_triangle_area(p1, p2, p3, scale=1.0):
 # Get point in 2d space
 #
 # ------------------------------------------
+def get_text_zoom_factor(scene, rv3d):
+    """Factor applied to the text offset (glfontx/glfonty) to keep it locked to the zoom level.
+
+    1.0 when the option is off, when no reference zoom is stored or in camera view.
+    """
+    if not scene.measureit_text_lock_zoom:
+        return 1.0
+    ref = scene.measureit_text_lock_ref
+    if rv3d is None or ref <= 0.0 or rv3d.view_perspective == 'CAMERA':
+        return 1.0
+    dist = rv3d.view_distance
+    if dist <= 0.0:
+        return 1.0
+    return ref / dist
+
+
+def get_text_point(scene, rv3d, point2d, ms):
+    """2D text position: projected point plus the user offset, scaled with the zoom when locked."""
+    factor = get_text_zoom_factor(scene, rv3d)
+    return point2d[0] + ms.glfontx * factor, point2d[1] + ms.glfonty * factor
+
+
 def get_2d_point(region, rv3d, point3d):
     if rv3d is not None and region is not None:
         return view3d_utils.location_3d_to_region_2d(region, rv3d, point3d)
