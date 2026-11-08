@@ -225,7 +225,7 @@ def register():
     Scene.measureit_ovr_font_align = EnumProperty(items=(('L', "Left Align", "Use current render"),
                                                          ('C', "Center Align", ""),
                                                          ('R', "Right Align", "")),
-                                                  name="Align Font",
+                                                  name="Align Font", default='C',
                                                   description="Set Font Alignment")
     Scene.measureit_units = EnumProperty(items=(('1', "Automatic", "Use scene units"),
                                                 ('2', "Meters", ""),
@@ -406,7 +406,7 @@ def register():
     Scene.measureit_font_align = EnumProperty(items=(('L', "Left Align", "Use current render"),
                                                      ('C', "Center Align", ""),
                                                      ('R', "Right Align", "")),
-                                              name="Align Font",
+                                              name="Align Font", default='C',
                                               description="Set Font Alignment")
 
     # OpenGL flag

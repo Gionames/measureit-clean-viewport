@@ -144,7 +144,7 @@ class MeasureitProperties(PropertyGroup):
     glfont_align: EnumProperty(items=(('L', "Left Align", ""),
                                        ('C', "Center Align", ""),
                                        ('R', "Right Align", "")),
-                                name="Align Font",
+                                name="Align Font", default='C',
                                 description="Set Font Alignment")
     glfont_rotat: IntProperty(name='Rotate', min=0, max=360, default=0,
                                 description="Text rotation in degrees")

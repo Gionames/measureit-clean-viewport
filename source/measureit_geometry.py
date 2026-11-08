@@ -443,7 +443,8 @@ def draw_segments(context, myobj, op, region, rv3d):
                                     gap3d = (b_p1[0] + via[0], b_p1[1] + via[1], b_p1[2] + via[2])
                                     txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
                                     if txtpoint2d is not None:
-                                        draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang)
+                                        txtside = get_dir_side(region, rv3d, gap3d, vna) or (0.0, 1.0)
+                                        draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang, txtside)
                                 # Radius
                                 if scene.measureit_gl_show_d is True and ms.gldist is True and \
                                         ms.glarc_rad is True:
@@ -456,9 +457,16 @@ def draw_segments(context, myobj, op, region, rv3d):
                             else:
                                 gap3d = (a_p1[0], a_p1[1], a_p1[2])
 
+                            if ms.gltype == 2:
+                                dir3 = Vector(vn)
+                            elif ms.gltype == 9:
+                                dir3 = Vector(ang_3)
+                            else:
+                                dir3 = Vector(b_p1) - Vector(a_p1)
                             txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
                             if txtpoint2d is not None:
-                                draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
+                                txtside = get_dir_side(region, rv3d, gap3d, dir3) or (0.0, 1.0)
+                                draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang, txtside)
                         except:
                             pass
                     # ------------------------------------
@@ -471,7 +479,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                         gap3d = (vn1[0], vn1[1], vn1[2])
                         txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
                         if txtpoint2d is not None:
-                            draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang)
+                            draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang, (0.0, 1.0))
 
                     # ------------------------------------
                     # Draw lines
@@ -638,7 +646,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                                 txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms)
                                 if txtpoint2d is not None:
                                     # todo: swap ms.glcolorarea with ms.glcolor ?
-                                    draw_text(myobj, txtpoint2d, msg, ms.glcolorarea, fsize, faln, fang)
+                                    draw_text(myobj, txtpoint2d, msg, ms.glcolorarea, fsize, faln, fang, (0.0, 1.0))
 
                 except IndexError:
                     ms.glfree = True
@@ -843,15 +851,11 @@ def get_text_point(scene, region, rv3d, p3d, ms, tangent=None, normal=None):
     return p2[0], p2[1]
 
 
-def get_text_side(region, rv3d, p3d, tangent, normal):
-    """Screen direction (unit vector) of the side of a dimension line where its text goes, or None."""
-    if tangent is None or normal is None or tangent.length < 1e-9:
+def get_dir_side(region, rv3d, p3d, d3):
+    """Screen direction (unit vector) of the 3D direction d3 at p3d, or None (zero or edge-on)."""
+    if d3 is None or d3.length < 1e-9:
         return None
-    t = tangent.normalized()
-    n = normal - t * normal.dot(t)
-    if n.length < 1e-9:
-        return None
-    n.normalize()
+    n = d3.normalized()
     p3 = Vector(p3d)
     a = get_2d_point(region, rv3d, p3)
     b = get_2d_point(region, rv3d, p3 + n * 0.01)
@@ -862,6 +866,15 @@ def get_text_side(region, rv3d, p3d, tangent, normal):
     if d < 1e-3:
         return None
     return dx / d, dy / d
+
+
+def get_text_side(region, rv3d, p3d, tangent, normal):
+    """Screen direction of the side of a dimension line where its text goes, or None."""
+    if tangent is None or normal is None or tangent.length < 1e-9:
+        return None
+    t = tangent.normalized()
+    n = normal - t * normal.dot(t)
+    return get_dir_side(region, rv3d, p3d, n)
 
 
 def get_scaled_font_size(scene, rv3d, fsize):
@@ -982,14 +995,41 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, 
     idx = len(mylines) - 1
     maxwidth = 0
     maxheight = len(mylines) * mheight
-    # Text block placed on the given side (screen direction) of the anchor point,
-    # with a small gap, so it never crosses the line it belongs to
-    if side is not None and align == 'L' and not text_rot:
-        bw = max(blf.dimensions(font_id, " " + ln)[0] for ln in mylines)
+    # Text block placed on the given side (screen direction) of the anchor point, with a
+    # small gap, so it never crosses the line it belongs to. The alignment (left/center/right)
+    # applies along the block, whatever the side.
+    if side is not None and not text_rot:
+        widths = [blf.dimensions(font_id, " " + ln)[0] for ln in mylines]
+        bw = max(widths)
         bh = maxheight
-        reach = round(4 * ui_scale) + abs(side[0]) * bw / 2 + abs(side[1]) * bh / 2
-        x_pos = x_pos + side[0] * reach - bw / 2
-        y_pos = y_pos + side[1] * reach + 0.25 * mheight - bh / 2
+        if align == 'C':
+            bx0 = x_pos - bw / 2
+        elif align == 'R':
+            bx0 = x_pos - bw
+        else:
+            bx0 = x_pos
+        by0 = y_pos - bh / 2
+        nx, ny = side
+        # corner of the block nearest to the anchor, measured along the side direction
+        near = ((bx0 if nx > 0 else bx0 + bw) - x_pos) * nx + ((by0 if ny > 0 else by0 + bh) - y_pos) * ny
+        push = round(4 * ui_scale) - near
+        bx0 += nx * push
+        by0 += ny * push
+        blf.enable(font_id, ROTATION)
+        blf.rotation(font_id, 0.0)
+        for k, ln in enumerate(mylines):
+            if align == 'C':
+                lx = bx0 + (bw - widths[k]) / 2
+            elif align == 'R':
+                lx = bx0 + bw - widths[k]
+            else:
+                lx = bx0
+            ly = by0 + 0.25 * mheight + mheight * (len(mylines) - 1 - k)
+            blf.position(font_id, lx, ly, 0)
+            blf.color(font_id, rgba[0], rgba[1], rgba[2], rgba[3])
+            blf.draw(font_id, " " + ln)
+        blf.disable(font_id, ROTATION)
+        return bw, bh
     # -------------------
     # Draw all lines
     # -------------------
