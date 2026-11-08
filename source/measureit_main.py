@@ -350,6 +350,7 @@ class MEASUREIT_PT_Edit(Panel):
                 row.prop(scene, 'measureit_gl_show_n', text="Texts", toggle=True, icon="FONT_DATA")
                 row = box.row()
                 row.prop(scene, 'measureit_hide_units', text="Hide measurement unit")
+                row.prop(scene, 'measureit_text_only', text="Text Only", toggle=True, icon="FONT_DATA")
                 # Scale factor
                 row = box.row()
                 row.prop(scene, 'measureit_scale', text="Scale")

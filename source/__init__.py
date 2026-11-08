@@ -149,6 +149,9 @@ def register():
     Scene.measureit_gl_show_n = BoolProperty(name="ShowName",
                                              description="Display texts",
                                              default=False)
+    Scene.measureit_text_only = BoolProperty(name="Text Only",
+                                             description="Show measurement values and names without lines or arrows",
+                                             default=False)
     Scene.measureit_scale = BoolProperty(name="Scale",
                                          description="Use scale factor",
                                          default=False)
@@ -409,6 +412,7 @@ def unregister():
     del Scene.measureit_gl_precision
     del Scene.measureit_gl_show_d
     del Scene.measureit_gl_show_n
+    del Scene.measureit_text_only
     del Scene.measureit_scale
     del Scene.measureit_scale_factor
     del Scene.measureit_scale_color

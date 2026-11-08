@@ -480,25 +480,25 @@ def draw_segments(context, myobj, op, region, rv3d):
                     # ------------------------------------
                     gpu.state.blend_set('ALPHA')
 
-                    if ms.gltype == 1:  # Segment
+                    if not scene.measureit_text_only and ms.gltype == 1:  # Segment
                         draw_line(screen_point_ap1, screen_point_v11, rgba)
                         draw_line(screen_point_bp1, screen_point_v22, rgba)
                         draw_arrow(screen_point_v1, screen_point_v2, rgba, a_size, a_type, b_type)
 
-                    if ms.gltype == 12 or ms.gltype == 13 or ms.gltype == 14:  # Segment to origin
+                    if not scene.measureit_text_only and (ms.gltype == 12 or ms.gltype == 13 or ms.gltype == 14):  # Segment to origin
                         draw_line(screen_point_ap1, screen_point_v11, rgba)
                         draw_line(screen_point_bp1, screen_point_v22, rgba)
                         draw_arrow(screen_point_v1, screen_point_v2, rgba, a_size, a_type, b_type)
 
-                    if ms.gltype == 2:  # Label
+                    if not scene.measureit_text_only and ms.gltype == 2:  # Label
                         draw_line(screen_point_v11a, screen_point_v11b, rgba)
                         draw_arrow(screen_point_ap1, screen_point_v11, rgba, a_size, a_type, b_type)
 
-                    if ms.gltype == 3 or ms.gltype == 4 or ms.gltype == 5 or ms.gltype == 8 \
-                            or ms.gltype == 6 or ms.gltype == 7:  # Origin and Links
+                    if not scene.measureit_text_only and (ms.gltype == 3 or ms.gltype == 4 or ms.gltype == 5 or ms.gltype == 8
+                                                           or ms.gltype == 6 or ms.gltype == 7):  # Origin and Links
                         draw_arrow(screen_point_ap1, screen_point_bp1, rgba, a_size, a_type, b_type)
 
-                    if ms.gltype == 9:  # Angle
+                    if not scene.measureit_text_only and ms.gltype == 9:  # Angle
                         dist, distloc = distance(an_p1, an_p2)
                         mp1 = interpolate3d(an_p1, an_p2, fabs(dist / 1.1))
 
@@ -513,7 +513,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                         draw_line(screen_point_an_p2, screen_point_an_p3, rgba)
                         draw_line(screen_point_an_p1, screen_point_an_p3, rgba)
 
-                    if ms.gltype == 11:  # arc
+                    if not scene.measureit_text_only and ms.gltype == 11:  # arc
                         # draw line from center of arc second point
                         c = Vector(a_p1)
                         if ms.glarc_rad is True:
