@@ -680,7 +680,11 @@ def get_area_and_paint(myvertices, myobj, obverts, region, rv3d, rgba, ms_scale)
             screen_point_p2 = get_2d_point(region, rv3d, p2)
             screen_point_p3 = get_2d_point(region, rv3d, p3)
 
-            draw_triangle(screen_point_p1, screen_point_p2, screen_point_p3, rgba)
+            # Area measures are drawn by a persistent viewport handler.  Their
+            # triangulated fill sits over the measured mesh and, when rgba has
+            # an alpha below 1, makes the object underneath look transparent.
+            # Keep calculating the area and drawing its label, but do not draw
+            # a filled polygon in this viewport-safe variant.
 
             # Area
 
@@ -696,7 +700,8 @@ def get_area_and_paint(myvertices, myobj, obverts, region, rv3d, rgba, ms_scale)
         screen_point_p1 = get_2d_point(region, rv3d, p1)
         screen_point_p2 = get_2d_point(region, rv3d, p2)
         screen_point_p3 = get_2d_point(region, rv3d, p3)
-        draw_triangle(screen_point_p1, screen_point_p2, screen_point_p3, rgba)
+        # See the n-gon branch above: retain the measurement, omit its
+        # translucent viewport fill.
 
         # Area
         area = get_triangle_area(p1, p2, p3, ms_scale)

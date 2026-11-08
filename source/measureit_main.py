@@ -1975,7 +1975,14 @@ def draw_main(context):
 # -------------------------------------------------------------
 # noinspection PyUnusedLocal
 def draw_callback_px(self, context):
-    draw_main(context)
+    # MeasureIt draws through a persistent 3D viewport handler.  Blender 5.2
+    # can reuse GPU state after an interrupted handler, so always return the
+    # blend pipeline to Blender's default even if a malformed measurement or
+    # another add-on raises while MeasureIt is drawing.
+    try:
+        draw_main(context)
+    finally:
+        gpu.state.blend_set('NONE')
 
 
 # -------------------------------------------------------------
