@@ -337,6 +337,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                             midpoint3d = interpolate3d(v1, v2, fabs(dist / 2))
                             txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms,
                                                         Vector(v2) - Vector(v1), vn)
+                            txtside = get_text_side(region, rv3d, midpoint3d, Vector(v2) - Vector(v1), vn) or (0.0, 1.0)
                             if txtpoint2d is None:
                                 raise ValueError("text position not available")
                             # Scale
@@ -364,7 +365,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                             if scene.measureit_gl_show_n is True and ms.glnames is True:
                                 msg += ms.gltxt
                             if scene.measureit_gl_show_d is True or scene.measureit_gl_show_n is True:
-                                draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang)
+                                draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang, txtside)
 
                             # ------------------------------
                             # if axis loc, show a indicator
@@ -842,6 +843,27 @@ def get_text_point(scene, region, rv3d, p3d, ms, tangent=None, normal=None):
     return p2[0], p2[1]
 
 
+def get_text_side(region, rv3d, p3d, tangent, normal):
+    """Screen direction (unit vector) of the side of a dimension line where its text goes, or None."""
+    if tangent is None or normal is None or tangent.length < 1e-9:
+        return None
+    t = tangent.normalized()
+    n = normal - t * normal.dot(t)
+    if n.length < 1e-9:
+        return None
+    n.normalize()
+    p3 = Vector(p3d)
+    a = get_2d_point(region, rv3d, p3)
+    b = get_2d_point(region, rv3d, p3 + n * 0.01)
+    if a is None or b is None:
+        return None
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    d = sqrt(dx * dx + dy * dy)
+    if d < 1e-3:
+        return None
+    return dx / d, dy / d
+
+
 def get_scaled_font_size(scene, rv3d, fsize):
     """Font size following the viewport zoom, kept between the min and max set in the panel, plus the +/- offset.
 
@@ -931,7 +953,7 @@ def get_group_sum(myobj, tag):
 # Create OpenGL text
 #
 # -------------------------------------------------------------
-def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0):
+def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, side=None):
     if pos2d is None:
         return
 
@@ -960,6 +982,14 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0):
     idx = len(mylines) - 1
     maxwidth = 0
     maxheight = len(mylines) * mheight
+    # Text block placed on the given side (screen direction) of the anchor point,
+    # with a small gap, so it never crosses the line it belongs to
+    if side is not None and align == 'L' and not text_rot:
+        bw = max(blf.dimensions(font_id, " " + ln)[0] for ln in mylines)
+        bh = maxheight
+        reach = round(4 * ui_scale) + abs(side[0]) * bw / 2 + abs(side[1]) * bh / 2
+        x_pos = x_pos + side[0] * reach - bw / 2
+        y_pos = y_pos + side[1] * reach + 0.25 * mheight - bh / 2
     # -------------------
     # Draw all lines
     # -------------------
