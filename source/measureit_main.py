@@ -352,8 +352,16 @@ class MEASUREIT_PT_Edit(Panel):
                 row.prop(scene, 'measureit_hide_units', text="Hide measurement unit")
                 row.prop(scene, 'measureit_text_only', text="Text Only", toggle=True, icon="FONT_DATA")
                 row = box.row()
-                row.prop(scene, 'measureit_text_lock_zoom', text="Lock text offset to zoom", toggle=True,
-                         icon="ZOOM_ALL")
+                row.prop(scene, 'measureit_font_min', text="Min font size when zooming out")
+                row = box.row()
+                row.prop(scene, 'measureit_font_max', text="Max font size when zooming in")
+                row = box.row(align=True)
+                row.label(text="Font size at this zoom:")
+                row.operator('measureit.fontzoom', text="-").action = 'MINUS'
+                row.operator('measureit.fontzoom', text="+").action = 'PLUS'
+                row = box.row()
+                row.operator('measureit.fontzoom', text="Reset zoom reference",
+                             icon="ZOOM_ALL").action = 'RESET'
                 # Scale factor
                 row = box.row()
                 row.prop(scene, 'measureit_scale', text="Scale")
@@ -800,6 +808,50 @@ class MEASUREIT_PT_Render(Panel):
 # Defines button that adds a measure segment
 #
 # -------------------------------------------------------------
+class MEASUREIT_OT_FontZoom(Operator):
+    bl_idname = "measureit.fontzoom"
+    bl_label = "Font size at current zoom"
+    bl_description = ("+ / -: change the font size seen at the current zoom level "
+                      "(acts on the min/max limit when it is the one in effect). "
+                      "Reset: use the current zoom as reference")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    action: EnumProperty(items=(('PLUS', "+", ""),
+                                ('MINUS', "-", ""),
+                                ('RESET', "Reset", "")),
+                         name="Action", default='PLUS')
+
+    def execute(self, context):
+        from .measureit_geometry import find_rv3d
+        scene = context.scene
+        rv3d = find_rv3d(context)
+        if rv3d is None or rv3d.view_perspective == 'CAMERA' or rv3d.view_distance <= 0.0:
+            self.report({'WARNING'}, "Use it from a 3D viewport, outside camera view")
+            return {'CANCELLED'}
+        dist = rv3d.view_distance
+        if self.action == 'RESET' or scene.measureit_zoom_ref <= 0.0:
+            scene.measureit_zoom_ref = dist
+            scene.measureit_font_scale = 1.0
+        if self.action != 'RESET':
+            step = 1 if self.action == 'PLUS' else -1
+            base = scene.measureit_font_size
+            raw = base * scene.measureit_font_scale * scene.measureit_zoom_ref / dist
+            lo = scene.measureit_font_min
+            hi = max(scene.measureit_font_max, lo)
+            if raw <= lo:
+                scene.measureit_font_min = max(1, min(lo + step, hi))
+            elif raw >= hi:
+                scene.measureit_font_max = max(lo, min(hi + step, 150))
+            else:
+                target = max(lo, min(hi, round(raw) + step))
+                scene.measureit_font_scale *= target / raw
+        if context.screen is not None:
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    area.tag_redraw()
+        return {'FINISHED'}
+
+
 class MEASUREIT_OT_AddSegment(Operator):
     bl_idname = "measureit.addsegment"
     bl_label = "Add"

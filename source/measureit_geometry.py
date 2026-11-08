@@ -83,6 +83,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                 fsize = ovrfsize
                 fang = ovrfang
                 faln = ovrfaln
+            fsize = get_scaled_font_size(scene, rv3d, fsize)
             # ------------------------------
             # only active and visible
             # ------------------------------
@@ -737,26 +738,70 @@ def get_triangle_area(p1, p2, p3, scale=1.0):
 # Get point in 2d space
 #
 # ------------------------------------------
-def get_text_zoom_factor(scene, rv3d):
-    """Factor applied to the text offset (glfontx/glfonty) to keep it locked to the zoom level.
+_zoom_ref_pending = set()
 
-    1.0 when the option is off, when no reference zoom is stored or in camera view.
+
+def find_rv3d(context):
+    """Return the RegionView3D of the current (or first) 3D viewport, or None."""
+    space = context.space_data
+    if space is not None and space.type == 'VIEW_3D':
+        return space.region_3d
+    if context.screen is not None:
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                return area.spaces.active.region_3d
+    return None
+
+
+def _capture_zoom_ref(scene_name, dist):
+    _zoom_ref_pending.discard(scene_name)
+    sc = bpy.data.scenes.get(scene_name)
+    if sc is not None and sc.measureit_zoom_ref <= 0.0:
+        sc.measureit_zoom_ref = dist
+    return None
+
+
+def get_zoom_ref(scene, rv3d):
+    """Return (reference, current) view distance, or None when zoom scaling does not apply.
+
+    The reference is captured automatically the first time measures are drawn in a scene
+    (properties cannot be written from a draw handler, so a one-shot timer does it).
     """
-    if not scene.measureit_text_lock_zoom:
-        return 1.0
-    ref = scene.measureit_text_lock_ref
-    if rv3d is None or ref <= 0.0 or rv3d.view_perspective == 'CAMERA':
-        return 1.0
+    if rv3d is None or rv3d.view_perspective == 'CAMERA':
+        return None
     dist = rv3d.view_distance
     if dist <= 0.0:
-        return 1.0
-    return ref / dist
+        return None
+    ref = scene.measureit_zoom_ref
+    if ref <= 0.0:
+        name = scene.name
+        if name not in _zoom_ref_pending:
+            _zoom_ref_pending.add(name)
+            bpy.app.timers.register(lambda n=name, d=dist: _capture_zoom_ref(n, d),
+                                    first_interval=0.0)
+        return None
+    return ref, dist
 
 
 def get_text_point(scene, rv3d, point2d, ms):
-    """2D text position: projected point plus the user offset, scaled with the zoom when locked."""
-    factor = get_text_zoom_factor(scene, rv3d)
+    """2D text position: projected point plus the user offset, scaled with the viewport zoom."""
+    zr = get_zoom_ref(scene, rv3d)
+    factor = zr[0] / zr[1] if zr else 1.0
     return point2d[0] + ms.glfontx * factor, point2d[1] + ms.glfonty * factor
+
+
+def get_scaled_font_size(scene, rv3d, fsize):
+    """Font size following the viewport zoom, kept between the min and max set in the panel.
+
+    A segment whose own size is already outside the limits is never forced beyond it.
+    """
+    zr = get_zoom_ref(scene, rv3d)
+    if zr is None:
+        return fsize
+    size = fsize * scene.measureit_font_scale * zr[0] / zr[1]
+    lo = min(scene.measureit_font_min, fsize)
+    hi = max(scene.measureit_font_max, fsize)
+    return min(hi, max(lo, size))
 
 
 def get_2d_point(region, rv3d, point3d):

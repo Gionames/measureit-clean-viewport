@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 id = "measureit_clean_viewport"
 name = "MeasureIt Clean Viewport"
-version = "1.9.1"
-tagline = "MeasureIt with opaque-safe, text-only and zoom-locked viewport labels"
+version = "1.9.2"
+tagline = "MeasureIt with opaque-safe, text-only and zoom-scaled viewport labels"
 maintainer = "Local compatibility variant"
 type = "add-on"
 tags = ["3D View"]
