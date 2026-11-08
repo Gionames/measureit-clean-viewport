@@ -356,7 +356,7 @@ class MEASUREIT_PT_Edit(Panel):
                 row = box.row()
                 row.prop(scene, 'measureit_font_max', text="Max font size when zooming in")
                 row = box.row(align=True)
-                row.label(text="Font size at this zoom:")
+                row.label(text="Font offset: %+d" % scene.measureit_font_offset)
                 row.operator('measureit.fontzoom', text="-").action = 'MINUS'
                 row.operator('measureit.fontzoom', text="+").action = 'PLUS'
                 row = box.row()
@@ -811,9 +811,8 @@ class MEASUREIT_PT_Render(Panel):
 class MEASUREIT_OT_FontZoom(Operator):
     bl_idname = "measureit.fontzoom"
     bl_label = "Font size at current zoom"
-    bl_description = ("+ / -: change the font size seen at the current zoom level "
-                      "(acts on the min/max limit when it is the one in effect). "
-                      "Reset: use the current zoom as reference")
+    bl_description = ("+ / -: add or remove one point to the font size at every zoom level. "
+                      "Reset: use the current zoom as reference and clear the offset")
     bl_options = {'REGISTER', 'UNDO'}
 
     action: EnumProperty(items=(('PLUS', "+", ""),
@@ -828,23 +827,14 @@ class MEASUREIT_OT_FontZoom(Operator):
         if rv3d is None or rv3d.view_perspective == 'CAMERA' or rv3d.view_distance <= 0.0:
             self.report({'WARNING'}, "Use it from a 3D viewport, outside camera view")
             return {'CANCELLED'}
-        dist = rv3d.view_distance
         if self.action == 'RESET' or scene.measureit_zoom_ref <= 0.0:
-            scene.measureit_zoom_ref = dist
-            scene.measureit_font_scale = 1.0
-        if self.action != 'RESET':
-            step = 1 if self.action == 'PLUS' else -1
-            base = scene.measureit_font_size
-            raw = base * scene.measureit_font_scale * scene.measureit_zoom_ref / dist
-            lo = scene.measureit_font_min
-            hi = max(scene.measureit_font_max, lo)
-            if raw <= lo:
-                scene.measureit_font_min = max(1, min(lo + step, hi))
-            elif raw >= hi:
-                scene.measureit_font_max = max(lo, min(hi + step, 150))
-            else:
-                target = max(lo, min(hi, round(raw) + step))
-                scene.measureit_font_scale *= target / raw
+            scene.measureit_zoom_ref = rv3d.view_distance
+        if self.action == 'RESET':
+            scene.measureit_font_offset = 0
+        elif self.action == 'PLUS':
+            scene.measureit_font_offset += 1
+        else:
+            scene.measureit_font_offset -= 1
         if context.screen is not None:
             for area in context.screen.areas:
                 if area.type == 'VIEW_3D':

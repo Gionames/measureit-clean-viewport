@@ -159,10 +159,10 @@ def register():
     Scene.measureit_font_max = IntProperty(name="Max font size when zooming in",
                                            description="Texts grow with the viewport zoom but never above this size",
                                            default=14, min=1, max=150)
-    Scene.measureit_font_scale = FloatProperty(name="Font zoom scale",
-                                               description="Multiplier for the zoom-following font size "
-                                                           "(changed by the + and - buttons)",
-                                               default=1.0, min=0.05, max=50.0)
+    Scene.measureit_font_offset = IntProperty(name="Font size offset",
+                                              description="Points added to the zoom-following font size, "
+                                                          "at every zoom level (changed by the + and - buttons)",
+                                              default=0, min=-100, max=100)
     Scene.measureit_zoom_ref = FloatProperty(name="Reference zoom",
                                              description="View distance at which texts have their own size "
                                                          "(set automatically, see Reset zoom reference)",
@@ -430,7 +430,7 @@ def unregister():
     del Scene.measureit_text_only
     del Scene.measureit_font_min
     del Scene.measureit_font_max
-    del Scene.measureit_font_scale
+    del Scene.measureit_font_offset
     del Scene.measureit_zoom_ref
     del Scene.measureit_scale
     del Scene.measureit_scale_factor

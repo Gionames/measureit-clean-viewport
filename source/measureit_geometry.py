@@ -791,17 +791,17 @@ def get_text_point(scene, rv3d, point2d, ms):
 
 
 def get_scaled_font_size(scene, rv3d, fsize):
-    """Font size following the viewport zoom, kept between the min and max set in the panel.
+    """Font size following the viewport zoom, kept between the min and max set in the panel, plus the +/- offset.
 
     A segment whose own size is already outside the limits is never forced beyond it.
     """
     zr = get_zoom_ref(scene, rv3d)
     if zr is None:
         return fsize
-    size = fsize * scene.measureit_font_scale * zr[0] / zr[1]
+    size = fsize * zr[0] / zr[1]
     lo = min(scene.measureit_font_min, fsize)
     hi = max(scene.measureit_font_max, fsize)
-    return min(hi, max(lo, size))
+    return max(1, min(hi, max(lo, size)) + scene.measureit_font_offset)
 
 
 def get_2d_point(region, rv3d, point3d):
