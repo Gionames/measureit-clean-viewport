@@ -124,7 +124,7 @@ def register():
     Scene.measureit_default_color = FloatVectorProperty(
         name="Default color",
         description="Default Color",
-        default=(0.173, 0.545, 1.0, 1.0),
+        default=(1.0, 1.0, 1.0, 1.0),
         min=0.1,
         max=1,
         subtype='COLOR',
