@@ -890,11 +890,11 @@ def get_zoom_factor(scene, rv3d):
 
 
 def get_scaled_font_size(scene, rv3d, fsize):
-    """Font size in exact proportion with the viewport zoom, plus the +/- offset."""
+    """Font size in exact proportion with the viewport zoom; the +/- steps scale it by 1.1 each."""
     zr = get_zoom_ref(scene, rv3d)
     if zr is None:
         return fsize
-    return max(1.0, fsize * zr[0] / zr[1] + scene.measureit_font_offset)
+    return max(1.0, fsize * zr[0] / zr[1] * (1.1 ** scene.measureit_font_offset))
 
 
 def get_2d_point(region, rv3d, point3d):

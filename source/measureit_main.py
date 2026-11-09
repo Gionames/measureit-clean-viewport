@@ -352,7 +352,7 @@ class MEASUREIT_PT_Edit(Panel):
                 row.prop(scene, 'measureit_hide_units', text="Hide measurement unit")
                 row.prop(scene, 'measureit_text_only', text="Text Only", toggle=True, icon="FONT_DATA")
                 row = box.row(align=True)
-                row.label(text="Font offset: %+d" % scene.measureit_font_offset)
+                row.label(text="Font scale: %+d (x%.2f)" % (scene.measureit_font_offset, 1.1 ** scene.measureit_font_offset))
                 row.operator('measureit.fontzoom', text="-").action = 'MINUS'
                 row.operator('measureit.fontzoom', text="+").action = 'PLUS'
                 row = box.row()
