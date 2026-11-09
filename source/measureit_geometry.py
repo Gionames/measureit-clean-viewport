@@ -629,6 +629,14 @@ def draw_segments(context, myobj, op, region, rv3d):
 
                             d1, dn = distance(p1, p2)
                             midpoint3d = interpolate3d(p1, p2, fabs(d1 / 2))
+                            # text anchored at the center of the bounding box of all the area vertices
+                            a_idx = set()
+                            for f_ in ms.measureit_faces:
+                                for v_ in f_.measureit_index:
+                                    a_idx.add(v_.glidx)
+                            if a_idx:
+                                a_pts = [get_point(obverts[i_].co, myobj) for i_ in a_idx]
+                                midpoint3d = tuple((min(p_[k_] for p_ in a_pts) + max(p_[k_] for p_ in a_pts)) / 2 for k_ in range(3))
 
                             # mult by world scale
                             tot *= scale
