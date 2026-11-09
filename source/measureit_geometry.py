@@ -89,7 +89,7 @@ def draw_segments(context, myobj, op, region, rv3d):
             # ------------------------------
             if ms.glview is True and ms.glfree is False:
                 # Arrow data
-                a_size = ms.glarrow_s
+                a_size = ms.glarrow_s * get_zoom_factor(scene, rv3d)
                 a_type = ms.glarrow_a
                 b_type = ms.glarrow_b
                 # noinspection PyBroadException
@@ -323,9 +323,9 @@ def draw_segments(context, myobj, op, region, rv3d):
                     # colour + line setup
                     # ------------------------------------
                     if ovr is False:
-                        imm_set_line_width(ms.glwidth)
+                        imm_set_line_width(max(0.1, ms.glwidth * get_zoom_factor(scene, rv3d)))
                     else:
-                        imm_set_line_width(ovrline)
+                        imm_set_line_width(max(0.1, ovrline * get_zoom_factor(scene, rv3d)))
 
                     # ------------------------------------
                     # Text (distance)
@@ -337,7 +337,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                             midpoint3d = interpolate3d(v1, v2, fabs(dist / 2))
                             txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms,
                                                         Vector(v2) - Vector(v1), vn)
-                            txtside = get_text_side(region, rv3d, midpoint3d, Vector(v2) - Vector(v1), vn) or (0.0, 1.0)
+                            txtside = get_text_side(region, rv3d, midpoint3d, Vector(v2) - Vector(v1), vn * (-1.0 if ms.glspace < 0 else 1.0)) or (0.0, 1.0)
                             if txtpoint2d is None:
                                 raise ValueError("text position not available")
                             # Scale
@@ -443,7 +443,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                                     gap3d = (b_p1[0] + via[0], b_p1[1] + via[1], b_p1[2] + via[2])
                                     txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
                                     if txtpoint2d is not None:
-                                        txtside = get_dir_side(region, rv3d, gap3d, vna) or (0.0, 1.0)
+                                        txtside = get_dir_side(region, rv3d, gap3d, vna * (-1.0 if ms.glspace < 0 else 1.0)) or (0.0, 1.0)
                                         draw_text(myobj, txtpoint2d, msg, rgba, fsize, faln, fang, txtside)
                                 # Radius
                                 if scene.measureit_gl_show_d is True and ms.gldist is True and \
@@ -465,7 +465,7 @@ def draw_segments(context, myobj, op, region, rv3d):
                                 dir3 = Vector(b_p1) - Vector(a_p1)
                             txtpoint2d = get_text_point(scene, region, rv3d, gap3d, ms)
                             if txtpoint2d is not None:
-                                txtside = get_dir_side(region, rv3d, gap3d, dir3) or (0.0, 1.0)
+                                txtside = get_dir_side(region, rv3d, gap3d, dir3 * (-1.0 if ms.glspace < 0 else 1.0)) or (0.0, 1.0)
                                 draw_text(myobj, txtpoint2d, tx_dist, rgba, fsize, faln, fang, txtside)
                         except:
                             pass
@@ -580,9 +580,9 @@ def draw_segments(context, myobj, op, region, rv3d):
                             screen_point_p1 = get_2d_point(region, rv3d, p1_)
                             screen_point_p2 = get_2d_point(region, rv3d, p2_)
                             if i == 0:
-                                draw_arrow(screen_point_p1, screen_point_p2, rgba, ms.glarc_s, ms.glarc_a, "99")
+                                draw_arrow(screen_point_p1, screen_point_p2, rgba, ms.glarc_s * get_zoom_factor(scene, rv3d), ms.glarc_a, "99")
                             elif i == int(n_step) - 1:
-                                draw_arrow(screen_point_p1, screen_point_p2, rgba, ms.glarc_s, "99", ms.glarc_b)
+                                draw_arrow(screen_point_p1, screen_point_p2, rgba, ms.glarc_s * get_zoom_factor(scene, rv3d), "99", ms.glarc_b)
                             else:
                                 draw_line(screen_point_p1, screen_point_p2, rgba)
 
@@ -877,18 +877,24 @@ def get_text_side(region, rv3d, p3d, tangent, normal):
     return get_dir_side(region, rv3d, p3d, n)
 
 
-def get_scaled_font_size(scene, rv3d, fsize):
-    """Font size following the viewport zoom, kept between the min and max set in the panel, plus the +/- offset.
+def get_zoom_factor(scene, rv3d):
+    """Ratio between the reference zoom distance and the current one (1.0 outside the 3D viewport).
 
-    A segment whose own size is already outside the limits is never forced beyond it.
+    Everything drawn in pixels (text, line width, arrows, gaps) is multiplied by it, so that it keeps
+    the same proportion with the objects at any zoom.
     """
+    zr = get_zoom_ref(scene, rv3d)
+    if zr is None or zr[1] <= 0:
+        return 1.0
+    return zr[0] / zr[1]
+
+
+def get_scaled_font_size(scene, rv3d, fsize):
+    """Font size in exact proportion with the viewport zoom, plus the +/- offset."""
     zr = get_zoom_ref(scene, rv3d)
     if zr is None:
         return fsize
-    size = fsize * zr[0] / zr[1]
-    lo = min(scene.measureit_font_min, fsize)
-    hi = max(scene.measureit_font_max, fsize)
-    return max(1, min(hi, max(lo, size)) + scene.measureit_font_offset)
+    return max(1.0, fsize * zr[0] / zr[1] + scene.measureit_font_offset)
 
 
 def get_2d_point(region, rv3d, point3d):
@@ -1012,7 +1018,7 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, 
         nx, ny = side
         # corner of the block nearest to the anchor, measured along the side direction
         near = ((bx0 if nx > 0 else bx0 + bw) - x_pos) * nx + ((by0 if ny > 0 else by0 + bh) - y_pos) * ny
-        push = round(4 * ui_scale) - near
+        push = 0.3 * mheight - near
         bx0 += nx * push
         by0 += ny * push
         blf.enable(font_id, ROTATION)

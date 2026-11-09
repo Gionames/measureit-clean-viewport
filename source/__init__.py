@@ -153,12 +153,6 @@ def register():
     Scene.measureit_text_only = BoolProperty(name="Text Only",
                                              description="Show measurement values and names without lines or arrows",
                                              default=False)
-    Scene.measureit_font_min = IntProperty(name="Min font size when zooming out",
-                                           description="Texts shrink with the viewport zoom but never below this size",
-                                           default=6, min=1, max=150)
-    Scene.measureit_font_max = IntProperty(name="Max font size when zooming in",
-                                           description="Texts grow with the viewport zoom but never above this size",
-                                           default=14, min=1, max=150)
     Scene.measureit_font_offset = IntProperty(name="Font size offset",
                                               description="Points added to the zoom-following font size, "
                                                           "at every zoom level (changed by the + and - buttons)",
@@ -433,8 +427,6 @@ def unregister():
     del Scene.measureit_gl_show_d
     del Scene.measureit_gl_show_n
     del Scene.measureit_text_only
-    del Scene.measureit_font_min
-    del Scene.measureit_font_max
     del Scene.measureit_font_offset
     del Scene.measureit_zoom_ref
     del Scene.measureit_zoom_ref_rot

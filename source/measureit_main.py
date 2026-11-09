@@ -351,10 +351,6 @@ class MEASUREIT_PT_Edit(Panel):
                 row = box.row()
                 row.prop(scene, 'measureit_hide_units', text="Hide measurement unit")
                 row.prop(scene, 'measureit_text_only', text="Text Only", toggle=True, icon="FONT_DATA")
-                row = box.row()
-                row.prop(scene, 'measureit_font_min', text="Min font size when zooming out")
-                row = box.row()
-                row.prop(scene, 'measureit_font_max', text="Max font size when zooming in")
                 row = box.row(align=True)
                 row.label(text="Font offset: %+d" % scene.measureit_font_offset)
                 row.operator('measureit.fontzoom', text="-").action = 'MINUS'
