@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "measureit_clean_viewport"
 name = "MeasureIt Clean Viewport"
-version = "1.9.10"
+version = "1.9.11"
 tagline = "MeasureIt with opaque-safe, text-only and zoom-scaled viewport labels"
 maintainer = "Local compatibility variant"
 type = "add-on"

@@ -175,7 +175,7 @@ def register():
                                                  description="Scale factor 1:x")
     Scene.measureit_scale_color = FloatVectorProperty(name="Scale color",
                                                       description="Scale Color",
-                                                      default=(1, 1, 0, 1.0),
+                                                      default=(1.0, 1.0, 1.0, 1.0),
                                                       min=0.1,
                                                       max=1,
                                                       subtype='COLOR',

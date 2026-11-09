@@ -272,7 +272,7 @@ class MeasureitProperties(PropertyGroup):
                                  description="Text for angle", default="A=")
     glcolorarea: FloatVectorProperty(name="glcolorarea",
                                       description="Color for the measure of area",
-                                      default=(0.1, 0.1, 0.1, 1.0),
+                                      default=(1.0, 1.0, 1.0, 1.0),
                                       min=0.1,
                                       max=1,
                                       subtype='COLOR',
