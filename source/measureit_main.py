@@ -113,7 +113,7 @@ class MeasureitProperties(PropertyGroup):
     glview: BoolProperty(name="glview",
                           description="Measure visible/hide",
                           default=True)
-    glspace: FloatProperty(name='glspace', min=-100, max=100, default=0.1,
+    glspace: FloatProperty(name='glspace', min=-100, max=100, default=0.05,
                             precision=3,
                             description='Distance to display measure')
     glwidth: IntProperty(name='glwidth', min=1, max=10, default=1,

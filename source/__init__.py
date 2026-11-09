@@ -132,7 +132,7 @@ def register():
     Scene.measureit_font_size = IntProperty(name="Text Size",
                                             description="Default text size",
                                             default=14, min=10, max=150)
-    Scene.measureit_hint_space = FloatProperty(name='Separation', min=0, max=100, default=0.1,
+    Scene.measureit_hint_space = FloatProperty(name='Separation', min=0, max=100, default=0.05,
                                                precision=3,
                                                description="Default distance to display measure")
     Scene.measureit_gl_ghost = BoolProperty(name="All",
