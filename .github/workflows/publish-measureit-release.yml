@@ -1,0 +1,43 @@
+name: Publish MeasureIt release
+
+on:
+  push:
+    paths:
+      - 'packages/measureit_clean_viewport-*.zip'
+      - '.github/workflows/publish-measureit-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'Gionames/measureit-clean-viewport'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create versioned GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(git ls-files 'packages/measureit_clean_viewport-*.zip' | sort -V | tail -n 1)
+          if [[ -z "$archive" ]]; then
+            echo 'No MeasureIt package found.' >&2
+            exit 1
+          fi
+          version="${archive##*/}"
+          version="${version#measureit_clean_viewport-}"
+          version="${version%.zip}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version: $version" >&2
+            exit 1
+          fi
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "Release v$version already exists."
+            exit 0
+          fi
+          gh release create "v$version" "$archive" \
+            --title "MeasureIt Clean Viewport v$version" \
+            --notes "Includes Collection-based area totals and viewport highlighting with Outliner names." \
+            --target "$GITHUB_SHA"
