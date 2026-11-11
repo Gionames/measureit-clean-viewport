@@ -69,6 +69,7 @@ def draw_area_totals(layout, context):
     for title, prop, detail_prop in (
         ('Room surfaces', 'measureit_room_collection', 'measureit_room_details'),
         ('Wall surfaces', 'measureit_wall_collection', 'measureit_wall_details'),
+        ('Outdoor surfaces', 'measureit_outdoor_collection', 'measureit_outdoor_details'),
     ):
         box.label(text=title)
         box.prop(scene, prop, text='Collection')
@@ -106,7 +107,8 @@ def draw_area_totals(layout, context):
         else:
             box.operator('measureit.highlight_counted_areas',
                          text='Highlight counted areas', icon='HIDE_OFF')
-            box.label(text='Green outlines; Esc to exit. Selection/editing locked.')
+            box.label(text='Rooms: green  |  Walls: white  |  Outdoor: blue')
+            box.label(text='Esc to exit; selection and editing locked.')
 
 
 def _format_area(fmt, scene, value):

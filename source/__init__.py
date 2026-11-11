@@ -129,9 +129,11 @@ def register():
 
     Scene.measureit_room_collection = PointerProperty(name='Room surfaces collection', type=bpy.types.Collection)
     Scene.measureit_wall_collection = PointerProperty(name='Wall surfaces collection', type=bpy.types.Collection)
+    Scene.measureit_outdoor_collection = PointerProperty(name='Outdoor surfaces collection', type=bpy.types.Collection)
     Scene.measureit_area_totals_open = BoolProperty(name='Area Totals', default=True)
     Scene.measureit_room_details = BoolProperty(name='Room surface details', default=False)
     Scene.measureit_wall_details = BoolProperty(name='Wall surface details', default=False)
+    Scene.measureit_outdoor_details = BoolProperty(name='Outdoor surface details', default=False)
 
     # Define properties
     Scene.measureit_default_color = FloatVectorProperty(
@@ -432,9 +434,11 @@ def unregister():
 
     del Scene.measureit_room_collection
     del Scene.measureit_wall_collection
+    del Scene.measureit_outdoor_collection
     del Scene.measureit_area_totals_open
     del Scene.measureit_room_details
     del Scene.measureit_wall_details
+    del Scene.measureit_outdoor_details
     del WindowManager.measureit_area_highlight_active
 
     # Remove properties

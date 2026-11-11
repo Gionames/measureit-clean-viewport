@@ -39,5 +39,5 @@ jobs:
           fi
           gh release create "v$version" "$archive" \
             --title "MeasureIt Clean Viewport v$version" \
-            --notes "Includes Collection-based area totals and viewport highlighting with Outliner names." \
+            --notes "Includes Collection-based room, wall and outdoor area totals with color-coded viewport highlighting and Outliner labels." \
             --target "$GITHUB_SHA"

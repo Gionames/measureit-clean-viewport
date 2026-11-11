@@ -17,6 +17,7 @@ A small compatibility variant of the Blender add-on **MeasureIt** (Blender 5.0+)
 - **Arc chain tool and text options (1.9.27)** - measures a chain of edges with estimated radius and angle (selection of the included edges, connector detection, start/end exclusion), line spacing for multi-line text and a name field. Developed with ChatGPT.
 - **Collection-based area totals (1.9.28)** - sum visible Area measurements from separate Room and Wall collections, respecting the current View Layer. Expand the details to see included and excluded measurements.
 - **Highlight counted areas (1.9.30)** - temporarily dim the viewport and draw thick green perimeters labeled with their Outliner object names. Selection and editing are blocked while inspecting; Esc exits, and zoom/pan remain available.
+- **Outdoor surfaces (1.9.31)** - an additional collection filter and total for balconies, terraces and other open-air areas. The viewport highlight uses green outlines for rooms, white for walls, and blue for outdoor surfaces.
 
 The add-on id is `measureit_clean_viewport`, different from upstream's `measureit`, so both can be installed side by side (do not enable both at the same time).
 

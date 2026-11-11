@@ -13,12 +13,25 @@ from bpy_extras.view3d_utils import location_3d_to_region_2d
 from .measureit_area_totals import collect_areas
 
 
-def counted_polygons(context, with_names=False):
+AREA_CATEGORIES = (
+    ('room', 'measureit_room_collection'),
+    ('wall', 'measureit_wall_collection'),
+    ('outdoor', 'measureit_outdoor_collection'),
+)
+
+OUTLINE_COLORS = {
+    'room': (0.15, 1.0, 0.26, 1.0),
+    'wall': (1.0, 1.0, 1.0, 1.0),
+    'outdoor': (0.12, 0.58, 1.0, 1.0),
+}
+
+
+def counted_polygons(context, with_names=False, with_categories=False):
     """Snapshot the same visible, measured faces used by Area Totals."""
     seen = set()
     polygons = []
-    for collection in (context.scene.measureit_room_collection,
-                       context.scene.measureit_wall_collection):
+    for category, attr in AREA_CATEGORIES:
+        collection = getattr(context.scene, attr)
         included, _ = collect_areas(context, collection)
         for obj, measure, _value in included:
             identity = (obj.as_pointer(), measure.as_pointer())
@@ -36,7 +49,10 @@ def counted_polygons(context, with_names=False):
                 if len(indices) < 3 or any(i < 0 or i >= len(coords) for i in indices):
                     continue
                 polygon = [obj.matrix_world @ coords[i] for i in indices]
-                polygons.append((obj.name, polygon) if with_names else polygon)
+                if with_categories:
+                    polygons.append((category, obj.name, polygon))
+                else:
+                    polygons.append((obj.name, polygon) if with_names else polygon)
     return polygons
 
 
@@ -50,6 +66,7 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
     _area = None
     _polygons = None
     _named_polygons = None
+    _categorized_polygons = None
     _navigating = False
 
     @classmethod
@@ -58,12 +75,12 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
         return (context.area is not None and context.area.type == 'VIEW_3D'
                 and scene is not None
                 and not context.window_manager.measureit_area_highlight_active
-                and (scene.measureit_room_collection is not None
-                     or scene.measureit_wall_collection is not None))
+                and any(getattr(scene, attr) is not None for _, attr in AREA_CATEGORIES))
 
     def invoke(self, context, event):
-        self._named_polygons = counted_polygons(context, with_names=True)
-        self._polygons = [polygon for _name, polygon in self._named_polygons]
+        self._categorized_polygons = counted_polygons(context, with_categories=True)
+        self._named_polygons = [(name, polygon) for _kind, name, polygon in self._categorized_polygons]
+        self._polygons = [polygon for _kind, _name, polygon in self._categorized_polygons]
         if not self._polygons:
             self.report({'WARNING'}, 'No visible Area measurements found in the chosen collections')
             return {'CANCELLED'}
@@ -107,6 +124,7 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
             self._area.tag_redraw()
         self._polygons = None
         self._named_polygons = None
+        self._categorized_polygons = None
 
     def _draw(self):
         area = self._area
@@ -136,10 +154,11 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
             poly_shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
             poly_shader.bind()
             poly_shader.uniform_float('viewportSize', (region.width, region.height))
-            for width, color in ((6.0, (0.01, 0.08, 0.02, 0.95)),
-                                 (3.5, (0.15, 1.0, 0.26, 1.0))):
+            for category in OUTLINE_COLORS:
                 segments = []
-                for polygon in self._polygons or ():
+                for kind, _name, polygon in self._categorized_polygons or ():
+                    if kind != category:
+                        continue
                     points = [location_3d_to_region_2d(region, rv3d, p) for p in polygon]
                     if any(p is None or not math.isfinite(p.x) or not math.isfinite(p.y)
                            for p in points):
@@ -150,15 +169,17 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
                             continue
                         segments.extend([(a.x, a.y), (b.x, b.y)])
                 if segments:
-                    poly_shader.uniform_float('lineWidth', width)
-                    poly_shader.uniform_float('color', color)
-                    batch_for_shader(poly_shader, 'LINES', {'pos': segments}).draw(poly_shader)
+                    for width, color in ((6.0, (0.01, 0.04, 0.02, 0.95)),
+                                         (3.5, OUTLINE_COLORS[category])):
+                        poly_shader.uniform_float('lineWidth', width)
+                        poly_shader.uniform_float('color', color)
+                        batch_for_shader(poly_shader, 'LINES', {'pos': segments}).draw(poly_shader)
 
             # Outliner object names, centered over the counted surfaces. The
             # labels belong only to this GPU overlay, never to the mesh.
             font_id = 0
             blf.size(font_id, 15)
-            for name, polygon in self._named_polygons or ():
+            for category, name, polygon in self._categorized_polygons or ():
                 points = [location_3d_to_region_2d(region, rv3d, p) for p in polygon]
                 if any(p is None or not math.isfinite(p.x) or not math.isfinite(p.y)
                        for p in points):
@@ -178,7 +199,7 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
                     (left, bottom), (right, top), (left, top),
                 ]})
                 shader.bind()
-                shader.uniform_float('color', (0.02, 0.10, 0.04, 0.86))
+                shader.uniform_float('color', (0.04, 0.06, 0.10, 0.86))
                 backdrop.draw(shader)
                 blf.color(font_id, 0.88, 1.0, 0.88, 1.0)
                 blf.position(font_id, x - text_width / 2, y - text_height / 2, 0)
