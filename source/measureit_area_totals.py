@@ -103,12 +103,12 @@ def draw_area_totals(layout, context):
         row.label(text=_format_area(fmt, scene, sum(totals)))
         box.separator()
         if context.window_manager.measureit_area_highlight_active:
-            box.label(text='Highlight active: press Esc to exit', icon='INFO')
+            box.label(text='Highlight active: click or press Esc to exit', icon='INFO')
         else:
             box.operator('measureit.highlight_counted_areas',
                          text='Highlight counted areas', icon='HIDE_OFF')
             box.label(text='Rooms: green  |  Walls: white  |  Outdoor: blue')
-            box.label(text='Esc to exit; selection and editing locked.')
+            box.label(text='Click or Esc to exit; editing locked.')
 
 
 def _format_area(fmt, scene, value):

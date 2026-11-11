@@ -67,7 +67,6 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
     _polygons = None
     _named_polygons = None
     _categorized_polygons = None
-    _navigating = False
 
     @classmethod
     def poll(cls, context):
@@ -85,7 +84,6 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
             self.report({'WARNING'}, 'No visible Area measurements found in the chosen collections')
             return {'CANCELLED'}
         self._area = context.area
-        self._navigating = False
         self._handler = SpaceView3D.draw_handler_add(self._draw, (), 'WINDOW', 'POST_PIXEL')
         context.window_manager.measureit_area_highlight_active = True
         context.window_manager.modal_handler_add(self)
@@ -93,20 +91,21 @@ class MEASUREIT_OT_HighlightCountedAreas(Operator):
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
+        # Consume the initiating mouse press: it must close inspection without
+        # falling through to Blender selection or editing operators.
+        if (event.type == 'ESC' and event.value == 'PRESS') or (
+                event.type in {'LEFTMOUSE', 'RIGHTMOUSE', 'MIDDLEMOUSE'}
+                and event.value == 'PRESS'):
             self._finish(context)
             return {'CANCELLED'}
         if (self._area is None or self._area.type != 'VIEW_3D'
                 or not context.window_manager.measureit_area_highlight_active):
             self._finish(context)
             return {'CANCELLED'}
-        # Allow only navigation, never clicks, selection, transforms or editing.
-        # Blender still handles the zoom/pan events normally.
-        if event.type == 'MIDDLEMOUSE':
-            self._navigating = event.value != 'RELEASE'
-        if event.type in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE',
-                          'TRACKPADPAN', 'TRACKPADZOOM', 'MOUSEROTATE', 'MOUSESMARTZOOM'} \
-                or (event.type == 'MOUSEMOVE' and self._navigating):
+        # Clicks terminate inspection, so middle-button pan is intentionally
+        # unavailable. Wheel/trackpad gestures remain available for navigation.
+        if event.type in {'WHEELUPMOUSE', 'WHEELDOWNMOUSE',
+                          'TRACKPADPAN', 'TRACKPADZOOM', 'MOUSEROTATE', 'MOUSESMARTZOOM'}:
             self._area.tag_redraw()
             return {'PASS_THROUGH'}
         return {'RUNNING_MODAL'}
