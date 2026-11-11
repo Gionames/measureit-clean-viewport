@@ -6,7 +6,7 @@
       "schema_version": "1.0.0",
       "id": "measureit_clean_viewport",
       "name": "MeasureIt Clean Viewport",
-      "version": "1.9.32",
+      "version": "2.0.0",
       "tagline": "Clean viewport measurement and area totals",
       "maintainer": "Local compatibility variant",
       "type": "add-on",
@@ -21,9 +21,9 @@
       "copyright": [
         "2024 Antonio Vazquez (antonioya)"
       ],
-      "archive_url": "https://github.com/Gionames/measureit-clean-viewport/releases/download/v1.9.32/measureit_clean_viewport-1.9.32.zip",
-      "archive_size": 42116,
-      "archive_hash": "sha256:937c2e2f8d02c9fb7ac5bf10acf8999c51cde88e18855b0b0cb1f84315fe75b0"
+      "archive_url": "https://github.com/Gionames/measureit-clean-viewport/releases/download/v2.0.0/measureit_clean_viewport-2.0.0.zip",
+      "archive_size": 42969,
+      "archive_hash": "sha256:deb7a0e040e4ae5272bb0d0060e6fb1a5a0c0bb3ed37be59b8dccabe6e3d21cc"
     }
   ]
 }

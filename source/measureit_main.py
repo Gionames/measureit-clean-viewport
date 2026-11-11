@@ -11,6 +11,7 @@
 # noinspection PyUnresolvedReferences
 import bpy
 import bmesh
+from functools import wraps
 from math import degrees
 from bmesh import from_edit_mesh
 # noinspection PyUnresolvedReferences
@@ -22,6 +23,71 @@ from bpy.app.handlers import persistent
 from .measureit_geometry import *
 from .measureit_render import *
 from .measureit_area_totals import draw_area_totals
+
+
+def _eligible_edit_geometry(obj, operator_id):
+    """Skip edit meshes without the selection requested by a measure tool."""
+    if obj.type != 'MESH' or obj.mode != 'EDIT':
+        return False
+    bm = bmesh.from_edit_mesh(obj.data)
+    if operator_id == 'measureit.addarea':
+        return any(face.select for face in bm.faces)
+    if operator_id == 'measureit.addsegment':
+        return sum(1 for vert in bm.verts if vert.select) >= 2
+    if operator_id in {'measureit.addangle', 'measureit.addarc'}:
+        return len(bm.select_history) == 3
+    if operator_id == 'measureit.addlabel':
+        return sum(1 for vert in bm.verts if vert.select) == 1
+    if operator_id in {'measureit.addsegmentorto', 'measureit.addarcchain'}:
+        return any(vert.select for vert in bm.verts) or any(edge.select for edge in bm.edges)
+    return False
+
+
+def multi_object_edit(execute_one):
+    """Apply a legacy single-object measurement operator to every edited mesh.
+
+    The active object is restored even if an individual operator fails. This
+    preserves the familiar single-object behavior and avoids mixed-object
+    vertex indices in stored measurements.
+    """
+    @wraps(execute_one)
+    def run(self, context):
+        if context.mode != 'EDIT_MESH':
+            return execute_one(self, context)
+        edited = tuple(obj for obj in context.objects_in_mode if obj.type == 'MESH')
+        if len(edited) <= 1:
+            return execute_one(self, context)
+        operator_id = self.bl_idname.lower().replace('_ot_', '.')
+        eligible = [obj for obj in edited if _eligible_edit_geometry(obj, operator_id)]
+        if not eligible:
+            self.report({'WARNING'}, 'No suitable selected geometry in the edited objects')
+            return {'CANCELLED'}
+        original_active = context.view_layer.objects.active
+        changed_objects = 0
+        new_measurements = 0
+        try:
+            for obj in eligible:
+                before = (len(obj.MeasureGenerator[0].measureit_segments)
+                          if obj.MeasureGenerator else 0)
+                with context.temp_override(object=obj, active_object=obj):
+                    result = execute_one(self, bpy.context)
+                after = (len(obj.MeasureGenerator[0].measureit_segments)
+                         if obj.MeasureGenerator else 0)
+                if 'FINISHED' in result and after > before:
+                    changed_objects += 1
+                    new_measurements += after - before
+        finally:
+            if original_active is not None:
+                context.view_layer.objects.active = original_active
+        if context.area is not None:
+            context.area.tag_redraw()
+        if new_measurements:
+            self.report({'INFO'}, f'Added {new_measurements} measurements on '
+                        f'{changed_objects} of {len(edited)} edited objects')
+            return {'FINISHED'}
+        self.report({'INFO'}, 'No new measurements (selection may already be measured)')
+        return {'CANCELLED'}
+    return run
 
 
 # ------------------------------------------------------
@@ -972,7 +1038,7 @@ class MEASUREIT_OT_FontZoom(Operator):
 class MEASUREIT_OT_AddSegment(Operator):
     bl_idname = "measureit.addsegment"
     bl_label = "Add"
-    bl_description = "(EDITMODE only) Add a new measure segment between 2 vertices (select 2 vertices or more)"
+    bl_description = "Add dimensions for selected edges/vertices on every mesh in Multi-Object Edit Mode"
 
     # ------------------------------
     # Poll
@@ -994,6 +1060,7 @@ class MEASUREIT_OT_AddSegment(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties
@@ -1060,12 +1127,13 @@ class MEASUREIT_OT_AddSegment(Operator):
 class MEASUREIT_OT_AddArcChain(Operator):
     bl_idname = "measureit.addarcchain"
     bl_label = "Arc Chain"
-    bl_description = "Measure an edge chain, or detect the arc from one selected edge or vertex"
+    bl_description = "Measure selected edge chains on all edited meshes, or detect an arc from a seed edge/vertex"
 
     @classmethod
     def poll(cls, context):
         return context.object is not None and context.object.type == 'MESH' and context.mode == 'EDIT_MESH'
 
+    @multi_object_edit
     def execute(self, context):
         obj = context.object
         bm = bmesh.from_edit_mesh(obj.data)
@@ -1176,7 +1244,7 @@ class MEASUREIT_OT_AddArcChain(Operator):
 class MEASUREIT_OT_AddArea(Operator):
     bl_idname = "measureit.addarea"
     bl_label = "Area"
-    bl_description = "(EDITMODE only) Add a new measure for area (select 1 o more faces)"
+    bl_description = "Add Area measurements for selected faces on all meshes in Multi-Object Edit Mode"
 
     # ------------------------------
     # Poll
@@ -1198,6 +1266,7 @@ class MEASUREIT_OT_AddArea(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties
@@ -1263,8 +1332,7 @@ class MEASUREIT_OT_AddArea(Operator):
 class MEASUREIT_OT_AddSegmentOrto(Operator):
     bl_idname = "measureit.addsegmentorto"
     bl_label = "Add"
-    bl_description = "(EDITMODE only) Add a new measure segment from vertex to object origin for one " \
-                     "axis (select 1 vertex)"
+    bl_description = "Add axis distances for selected vertices on every mesh in Multi-Object Edit Mode"
     tag: IntProperty()
 
     # ------------------------------
@@ -1287,6 +1355,7 @@ class MEASUREIT_OT_AddSegmentOrto(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties
@@ -1353,7 +1422,7 @@ class MEASUREIT_OT_AddSegmentOrto(Operator):
 class MEASUREIT_OT_AddAngle(Operator):
     bl_idname = "measureit.addangle"
     bl_label = "Angle"
-    bl_description = "(EDITMODE only) Add a new angle measure (select 3 vertices, 2nd is angle vertex)"
+    bl_description = "Add an angle per edited mesh (select 3 vertices per mesh; 2nd is the angle vertex)"
 
     # ------------------------------
     # Poll
@@ -1375,6 +1444,7 @@ class MEASUREIT_OT_AddAngle(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties
@@ -1433,8 +1503,7 @@ class MEASUREIT_OT_AddAngle(Operator):
 class MEASUREIT_OT_AddArc(Operator):
     bl_idname = "measureit.addarc"
     bl_label = "Angle"
-    bl_description = "(EDITMODE only) Add a new arc measure (select 3 vertices of the arc," \
-                     " vertices 1st and 3rd are arc extremes)"
+    bl_description = "Add an arc per edited mesh (select 3 vertices per mesh, 1st/3rd are arc ends)"
 
     # ------------------------------
     # Poll
@@ -1456,6 +1525,7 @@ class MEASUREIT_OT_AddArc(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties
@@ -1517,7 +1587,7 @@ class MEASUREIT_OT_AddArc(Operator):
 class MEASUREIT_OT_AddLabel(Operator):
     bl_idname = "measureit.addlabel"
     bl_label = "Add"
-    bl_description = "(EDITMODE only) Add a new measure label (select 1 vertex)"
+    bl_description = "Add a label at the selected vertex on each mesh in Multi-Object Edit Mode"
 
     # ------------------------------
     # Poll
@@ -1539,6 +1609,7 @@ class MEASUREIT_OT_AddLabel(Operator):
     # ------------------------------
     # Execute button action
     # ------------------------------
+    @multi_object_edit
     def execute(self, context):
         if context.area.type == 'VIEW_3D':
             # Add properties

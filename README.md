@@ -19,6 +19,7 @@ A fork of the Blender add-on **MeasureIt** (Blender 5.0+) with zoom-proportional
 - **Highlight counted areas (1.9.30)** - temporarily dim the viewport and draw thick green perimeters labeled with their Outliner object names. Selection and editing are blocked while inspecting; Esc exits, and zoom/pan remain available.
 - **Outdoor surfaces (1.9.31)** - an additional collection filter and total for balconies, terraces and other open-air areas. The viewport highlight uses green outlines for rooms, white for walls, and blue for outdoor surfaces.
 - **Click to exit highlight (1.9.32)** - while highlighting areas, any mouse-button press closes the overlay without forwarding the click to Blender; Esc also works. Wheel and trackpad navigation remain available.
+- **Multi-Object Edit Mode (2.0.0)** - Area, Segment, axis distances, Angle, Arc, Arc Chain and Label now create measurements on every edited mesh with a suitable selection. Vertex indices and measures remain independent per object; the active object is restored after the operation. Object-mode Link and Origin are unchanged.
 
 The add-on id is `measureit_clean_viewport`, different from upstream's `measureit`, so both can be installed side by side (do not enable both at the same time).
 
