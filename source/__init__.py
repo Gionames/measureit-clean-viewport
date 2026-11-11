@@ -97,6 +97,7 @@ classes = (
     measureit_main.MEASUREIT_OT_AddSegmentOrto,
     measureit_main.MEASUREIT_OT_AddAngle,
     measureit_main.MEASUREIT_OT_AddArc,
+    measureit_main.MEASUREIT_OT_AddArcChain,
     measureit_main.MEASUREIT_OT_AddLabel,
     measureit_main.MEASUREIT_OT_AddNote,
     measureit_main.MEASUREIT_OT_AddLink,

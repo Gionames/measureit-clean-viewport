@@ -12,7 +12,7 @@ import bpy
 # noinspection PyUnresolvedReferences
 import blf
 from blf import ROTATION
-from math import fabs, degrees, radians, sqrt, cos, sin, pi
+from math import fabs, degrees, radians, sqrt, cos, sin, pi, atan2, isfinite
 from mathutils import Vector, Matrix, Quaternion
 from bmesh import from_edit_mesh
 from bpy_extras import view3d_utils, mesh_utils
@@ -29,12 +29,193 @@ shader_line = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR') if not bpy.app.b
 imm_line_width = 1.0
 imm_viewport = (0, 0)
 
+
+def fit_chain_circle(points):
+    """Least-squares circular fit of an ordered 3D polyline, or None."""
+    if len(points) < 3:
+        return None
+    origin = points[0]
+    x = points[-1] - origin
+    if x.length < 1e-9:
+        return None
+    x.normalize()
+    mid = max(points[1:-1], key=lambda p: ((p - origin) - x * (p - origin).dot(x)).length)
+    y = (mid - origin) - x * (mid - origin).dot(x)
+    if y.length < 1e-9:
+        return None
+    y.normalize()
+    normal = x.cross(y)
+    coords = [((p - origin).dot(x), (p - origin).dot(y)) for p in points]
+    matrix = Matrix(((sum(4*u*u for u, v in coords), sum(4*u*v for u, v in coords), sum(2*u for u, v in coords)),
+                     (sum(4*u*v for u, v in coords), sum(4*v*v for u, v in coords), sum(2*v for u, v in coords)),
+                     (sum(2*u for u, v in coords), sum(2*v for u, v in coords), len(coords))))
+    target = Vector((sum(2*u*(u*u+v*v) for u, v in coords),
+                     sum(2*v*(u*u+v*v) for u, v in coords),
+                     sum(u*u+v*v for u, v in coords)))
+    try:
+        cx, cy, constant = matrix.inverted() @ target
+    except (ValueError, ZeroDivisionError):
+        return None
+    radius_sq = constant + cx*cx + cy*cy
+    if radius_sq <= 0:
+        return None
+    radius = sqrt(radius_sq)
+    errors = [sqrt((u-cx)**2 + (v-cy)**2) - radius for u, v in coords]
+    rms = sqrt(sum(e*e for e in errors) / len(errors))
+    offplane = max(abs((p-origin).dot(normal)) for p in points)
+    if rms > 0.02*radius or offplane > 0.02*radius:
+        return None
+    angles = [atan2(v-cy, u-cx) for u, v in coords]
+    sweep = 0.0
+    for first, second in zip(angles, angles[1:]):
+        delta = (second-first+pi) % (2*pi) - pi
+        sweep += delta
+    return radius, abs(sweep), rms
+
+
+def chain_trim(points, automatic, start, end):
+    """Detect exceptionally short end joins; manual trims are additional."""
+    lengths = [(b-a).length for a, b in zip(points, points[1:])]
+    left, right = start, end
+    if automatic and len(lengths) >= 6:
+        middle = sorted(lengths[1:-1])
+        median = middle[len(middle)//2]
+        if lengths[0] < median*0.35:
+            left += 1
+        if lengths[-1] < median*0.35:
+            right += 1
+    return left, right
+
+
+def chain_included_bounds(points, detect_connectors, mode, start, end):
+    """One source of truth for dimensions, curve fit and mesh selection.
+
+    With connectors excludes only manual endpoints. Without connectors also
+    removes automatically detected terminal joins. Detection OFF includes all.
+    """
+    if not detect_connectors:
+        return 0, 0
+    left, right = chain_trim(points, mode == 'ARC', start, end)
+    if left + right >= len(points) - 1:
+        return 0, 0
+    return left, right
+
+
+def draw_smooth_chain_line(points, rgba, width):
+    """Subdivide the viewport curve and soften single-pixel stair steps."""
+    if len(points) < 2:
+        return
+    samples = [Vector(points[0])]
+    for i in range(len(points)-1):
+        p0 = Vector(points[max(i-1, 0)])
+        p1 = Vector(points[i])
+        p2 = Vector(points[i+1])
+        p3 = Vector(points[min(i+2, len(points)-1)])
+        for step in range(1, 5):
+            t = step / 4.0
+            t2, t3 = t*t, t*t*t
+            samples.append(0.5 * ((2*p1) + (-p0+p2)*t +
+                                   (2*p0-5*p1+4*p2-p3)*t2 +
+                                   (-p0+3*p1-3*p2+p3)*t3))
+    if width <= 1.5:
+        imm_set_line_width(max(2.0, width * 2.0))
+        halo = (rgba[0], rgba[1], rgba[2], rgba[3] * 0.22)
+        for a, b in zip(samples, samples[1:]):
+            draw_line(a, b, halo)
+    imm_set_line_width(width)
+    for a, b in zip(samples, samples[1:]):
+        draw_line(a, b, rgba)
+
+
+def draw_arc_chain(context, myobj, ms, region, rv3d, scene, fmt, units, fsize, align, rotation, rgba):
+    obverts = get_mesh_vertices(myobj)
+    indices = [item.glidx for item in ms.chain_indices]
+    if obverts is None or len(indices) < 2 or any(i < 0 or i >= len(obverts) for i in indices):
+        return
+    points = [Vector(get_point(obverts[i].co, myobj)) for i in indices]
+    segments = [(b-a).length for a, b in zip(points, points[1:])]
+    left, right = chain_included_bounds(points, ms.chain_auto_trim,
+                                       ms.chain_mode, ms.chain_trim_start,
+                                       ms.chain_trim_end)
+    core = points[left:len(points)-right if right else len(points)]
+    # All three dimensions refer to the same included edges.
+    measured_segments = segments[left:len(segments)-right if right else len(segments)]
+    total = sum(measured_segments)
+    factor = scene.measureit_scale_factor if scene.measureit_scale else 1.0
+    unit_scale = scene.unit_settings.scale_length
+    lines = []
+    if scene.measureit_gl_show_n and ms.glnames and ms.gltxt.strip():
+        lines.append(ms.gltxt.strip())
+    if scene.measureit_gl_show_d and ms.gldist:
+        lines.append('L = ' + format_distance(fmt, units, total * factor * unit_scale))
+    fit = fit_chain_circle(core)
+    if fit is not None and scene.measureit_gl_show_d and ms.gldist:
+        radius, sweep, error = fit
+        if ms.chain_radius:
+            lines.append('R ≈ ' + format_distance(fmt, units, radius * factor * unit_scale))
+        if ms.chain_angle:
+            lines.append('A ≈ ' + fmt % degrees(sweep) + '°')
+    # Anchor at 50% of the length of the selected measurement path.
+    shown_points = core
+    path_lengths = [(b-a).length for a, b in zip(shown_points, shown_points[1:])]
+    halfway = sum(path_lengths) / 2
+    anchor = shown_points[0]
+    for a, b, length in zip(shown_points, shown_points[1:], path_lengths):
+        if halfway <= length:
+            anchor = a.lerp(b, halfway / length) if length > 1e-12 else a
+            break
+        halfway -= length
+    # Like MeasureIt's ordinary dimensions, Distance is a signed WORLD-space
+    # offset, and the text X/Y offsets follow tangent/normal dimension axes.
+    center = Vector(get_location(myobj))
+    plane = (shown_points[-1] - shown_points[0]).cross(shown_points[len(shown_points)//2] - shown_points[0])
+    if plane.length < 1e-9:
+        plane = Vector((0.0, 0.0, 1.0))
+    plane.normalize()
+    offsets = []
+    for i, p in enumerate(shown_points):
+        tangent = shown_points[min(i+1, len(shown_points)-1)] - shown_points[max(i-1, 0)]
+        normal = tangent.cross(plane)
+        if normal.length < 1e-9:
+            normal = p - center
+        if normal.length > 1e-9:
+            normal.normalize()
+        if normal.dot(p-center) < 0:
+            normal.negate()
+        offsets.append(normal)
+    shifted_points = [p + n * ms.glspace for p, n in zip(shown_points, offsets)]
+    nearest = min(range(len(shown_points)), key=lambda i: (shown_points[i]-anchor).length_squared)
+    anchor_shifted = anchor + offsets[nearest] * ms.glspace
+    tangent_at_anchor = shown_points[min(nearest+1, len(shown_points)-1)] - shown_points[max(nearest-1, 0)]
+    text_normal = offsets[nearest] * (-1.0 if ms.glspace < 0 else 1.0)
+    if not scene.measureit_text_only and region is not None and rv3d is not None:
+        screens = [get_2d_point(region, rv3d, p) for p in shown_points]
+        shifted = [get_2d_point(region, rv3d, p) for p in shifted_points]
+        if all(p is not None for p in screens + shifted):
+            width = max(0.1, ms.glwidth * get_zoom_factor(scene, rv3d))
+            draw_smooth_chain_line(shifted, rgba, width)
+            draw_line(screens[0], shifted[0], rgba)
+            draw_line(screens[-1], shifted[-1], rgba)
+            marker_size = ms.glarrow_s * get_zoom_factor(scene, rv3d)
+            if ms.glarrow_a != '99':
+                draw_arrow(shifted[0], shifted[1], rgba, marker_size, ms.glarrow_a, '99')
+            if ms.glarrow_b != '99':
+                draw_arrow(shifted[-2], shifted[-1], rgba, marker_size, '99', ms.glarrow_b)
+    if lines:
+        pos = get_text_point(scene, region, rv3d, anchor_shifted, ms,
+                             tangent_at_anchor, text_normal)
+        if pos is not None:
+            side = (get_text_side(region, rv3d, anchor_shifted,
+                                  tangent_at_anchor, text_normal)
+                    if region is not None and rv3d is not None else None) or (0.0, 1.0)
+            draw_text(myobj, pos, '|'.join(lines), rgba, fsize, align, rotation, side, line_spacing=1.3)
+
 def imm_set_line_width(width):
     global imm_line_width, imm_viewport
     region = bpy.context.region
     imm_viewport = (region.width, region.height)
 
-    imm_line_width = width
+    imm_line_width = min(32.0, max(0.1, width)) if isfinite(width) else 1.0
 
 # -------------------------------------------------------------
 # Draw segments
@@ -98,6 +279,11 @@ def draw_segments(context, myobj, op, region, rv3d):
                         rgba = ms.glcolor
                     else:
                         rgba = ovrcolor
+
+                    if ms.gltype == 21:
+                        draw_arc_chain(context, myobj, ms, region, rv3d, scene,
+                                       fmt, units, fsize, faln, fang, rgba)
+                        continue
 
                     # ----------------------
                     # Segment or Label
@@ -644,17 +830,19 @@ def draw_segments(context, myobj, op, region, rv3d):
                             # -----------------------------------
                             # Draw text
                             # -----------------------------------
-                            if scene.measureit_gl_show_d is True and ms.gldist is True:
-                                msg = tx_dist + " "
-                            else:
-                                msg = " "
+                            area_lines = []
                             if scene.measureit_gl_show_n is True and ms.glnames is True:
-                                msg += ms.gltxt
-                            if scene.measureit_gl_show_d is True or scene.measureit_gl_show_n is True:
+                                if ms.gltxt.strip():
+                                    area_lines.append(ms.gltxt.strip())
+                            if scene.measureit_gl_show_d is True and ms.gldist is True:
+                                area_lines.append(tx_dist)
+                            # The existing description sits above the measured area.
+                            # Both lines share the area's anchor and X/Y text offsets.
+                            if area_lines:
                                 txtpoint2d = get_text_point(scene, region, rv3d, midpoint3d, ms)
                                 if txtpoint2d is not None:
                                     # todo: swap ms.glcolorarea with ms.glcolor ?
-                                    draw_text(myobj, txtpoint2d, msg, ms.glcolorarea, fsize, faln, fang, (0.0, 1.0))
+                                    draw_text(myobj, txtpoint2d, "|".join(area_lines), ms.glcolorarea, fsize, faln, fang, (0.0, 1.0), line_spacing=1.3)
 
                 except IndexError:
                     ms.glfree = True
@@ -894,15 +1082,17 @@ def get_zoom_factor(scene, rv3d):
     zr = get_zoom_ref(scene, rv3d)
     if zr is None or zr[1] <= 0:
         return 1.0
-    return zr[0] / zr[1]
+    ratio = zr[0] / zr[1]
+    return min(100.0, max(0.01, ratio)) if isfinite(ratio) else 1.0
 
 
 def get_scaled_font_size(scene, rv3d, fsize):
     """Font size in exact proportion with the viewport zoom; the +/- steps scale it by 1.1 each."""
     zr = get_zoom_ref(scene, rv3d)
-    if zr is None:
-        return fsize
-    return max(1.0, fsize * zr[0] / zr[1] * (1.1 ** scene.measureit_font_offset))
+    if zr is None or zr[1] <= 0:
+        return min(256.0, max(1.0, fsize))
+    size = fsize * zr[0] / zr[1] * (1.1 ** scene.measureit_font_offset)
+    return min(256.0, max(1.0, size)) if isfinite(size) else 14.0
 
 
 def get_2d_point(region, rv3d, point3d):
@@ -980,16 +1170,20 @@ def get_group_sum(myobj, tag):
 # Create OpenGL text
 #
 # -------------------------------------------------------------
-def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, side=None):
+def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, side=None, line_spacing=1.0):
     if pos2d is None:
         return
 
     # dpi = bpy.context.preferences.system.dpi
     gap = 12
     x_pos, y_pos = pos2d
+    if not all(isfinite(value) for value in (x_pos, y_pos, fsize)):
+        return
     font_id = 0
     ui_scale = bpy.context.preferences.system.ui_scale
-    blf.size(font_id, round(fsize * ui_scale))
+    # Extremely large font atlases can crash Blender's GPU/BLF backend.
+    # Clamp after UI scaling as a final safety net for every measurement type.
+    blf.size(font_id, max(1, min(256, round(fsize * ui_scale))))
     # blf.size(font_id, fsize)
     # height of one line
     mwidth, mheight = blf.dimensions(font_id, "Tp")  # uses high/low letters
@@ -1008,7 +1202,8 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, 
     mylines = display_text.split("|")
     idx = len(mylines) - 1
     maxwidth = 0
-    maxheight = len(mylines) * mheight
+    line_step = mheight * line_spacing
+    maxheight = mheight + (len(mylines) - 1) * line_step
     # Text block placed on the given side (screen direction) of the anchor point, with a
     # small gap, so it never crosses the line it belongs to. The alignment (left/center/right)
     # applies along the block, whatever the side.
@@ -1038,7 +1233,7 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, 
                 lx = bx0 + bw - widths[k]
             else:
                 lx = bx0
-            ly = by0 + 0.25 * mheight + mheight * (len(mylines) - 1 - k)
+            ly = by0 + 0.25 * mheight + line_step * (len(mylines) - 1 - k)
             blf.position(font_id, lx, ly, 0)
             blf.color(font_id, rgba[0], rgba[1], rgba[2], rgba[3])
             blf.draw(font_id, " " + ln)
@@ -1058,7 +1253,7 @@ def draw_text(myobj, pos2d, display_text, rgba, fsize, align='L', text_rot=0.0, 
             blf.enable(font_id, ROTATION)
             blf.rotation(font_id, text_rot)
         # calculate new Y position
-        new_y = y_pos + (mheight * idx)
+        new_y = y_pos + (line_step * idx)
         # Draw
         blf.position(font_id, newx, new_y, 0)
         blf.color(font_id, rgba[0], rgba[1], rgba[2], rgba[3])

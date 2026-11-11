@@ -11,6 +11,7 @@
 # noinspection PyUnresolvedReferences
 import bpy
 import bmesh
+from math import degrees
 from bmesh import from_edit_mesh
 # noinspection PyUnresolvedReferences
 from bpy.types import PropertyGroup, Panel, Object, Operator, SpaceView3D
@@ -89,6 +90,93 @@ class MeasureitFaces(PropertyGroup):
 
 # Register
 bpy.utils.register_class(MeasureitFaces)
+
+
+def update_arc_chain_selection(self, context):
+    """Reflect the linear-length mode and connector exclusions in Edit Mode."""
+    if not self.chain_select_edges or not self.chain_selection_saved:
+        return
+    obj = getattr(self, 'id_data', None)
+    if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
+        return
+    if self.gltype != 21:
+        return
+    bm = bmesh.from_edit_mesh(obj.data)
+    bm.verts.ensure_lookup_table()
+    bm.edges.ensure_lookup_table()
+    indices = [item.glidx for item in self.chain_indices]
+    if len(indices) < 2 or any(i < 0 or i >= len(bm.verts) for i in indices):
+        return
+    points = [Vector(get_point(bm.verts[i].co, obj)) for i in indices]
+    left, right = chain_included_bounds(points, self.chain_auto_trim,
+                                        self.chain_mode, self.chain_trim_start,
+                                        self.chain_trim_end)
+    count = len(indices) - 1
+    selection_mode = context.tool_settings.mesh_select_mode
+    if selection_mode[2]:
+        return
+    # Rebuild the temporary highlight from scratch after every property edit.
+    # The old selection has already been saved by the toggle callback.
+    for e in bm.edges:
+        e.select_set(False)
+    for v in bm.verts:
+        v.select_set(False)
+    # Select precisely the edges used by every displayed measurement.
+    for j, (a, b) in enumerate(zip(indices, indices[1:])):
+        edge = next((e for e in bm.verts[a].link_edges
+                     if bm.verts[b] in e.verts), None)
+        if edge is not None:
+            if left <= j < count - right:
+                if selection_mode[0] and not selection_mode[1]:
+                    bm.verts[a].select_set(True)
+                    bm.verts[b].select_set(True)
+                else:
+                    edge.select_set(True)
+    bm.select_flush_mode()
+    bmesh.update_edit_mesh(obj.data)
+    if context.area is not None:
+        context.area.tag_redraw()
+
+
+def toggle_arc_chain_selection(self, context):
+    """Temporary selection overlay; OFF restores the original edge/vertex set."""
+    obj = getattr(self, 'id_data', None)
+    if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
+        return
+    bm = bmesh.from_edit_mesh(obj.data)
+    bm.verts.ensure_lookup_table()
+    bm.edges.ensure_lookup_table()
+    bm.edges.index_update()
+    if context.tool_settings.mesh_select_mode[2]:
+        return
+    if self.chain_select_edges:
+        self.chain_saved_edges.clear()
+        self.chain_saved_vertices.clear()
+        for e in bm.edges:
+            if e.select:
+                self.chain_saved_edges.add().glidx = e.index
+        for v in bm.verts:
+            if v.select:
+                self.chain_saved_vertices.add().glidx = v.index
+        self.chain_selection_saved = True
+        update_arc_chain_selection(self, context)
+    elif self.chain_selection_saved:
+        for e in bm.edges:
+            e.select_set(False)
+        for v in bm.verts:
+            v.select_set(False)
+        for v in self.chain_saved_vertices:
+            if 0 <= v.glidx < len(bm.verts):
+                bm.verts[v.glidx].select_set(True)
+        for e in self.chain_saved_edges:
+            if 0 <= e.glidx < len(bm.edges):
+                bm.edges[e.glidx].select_set(True)
+        self.chain_saved_edges.clear()
+        self.chain_saved_vertices.clear()
+        self.chain_selection_saved = False
+        bmesh.update_edit_mesh(obj.data)
+        if context.area is not None:
+            context.area.tag_redraw()
 
 
 # ------------------------------------------------------------------
@@ -248,6 +336,25 @@ class MeasureitProperties(PropertyGroup):
     glarc_ang: BoolProperty(name="arc ang",
                              description="Show arc angle",
                              default=True)
+    chain_indices: CollectionProperty(type=MeasureitIndex)
+    chain_saved_edges: CollectionProperty(type=MeasureitIndex)
+    chain_saved_vertices: CollectionProperty(type=MeasureitIndex)
+    chain_selection_saved: BoolProperty(default=False)
+    chain_select_edges: BoolProperty(name="Select all edges included",
+                                     description="Temporarily select measured edges; turn off to restore the previous selection",
+                                     default=False, update=toggle_arc_chain_selection)
+    chain_mode: EnumProperty(name="Linear segment length", items=(
+        ('ALL', "With connectors", "Sum every edge, including connectors"),
+        ('ARC', "Without connectors", "Sum only the circular portion")),
+        default='ALL', update=update_arc_chain_selection)
+    chain_radius: BoolProperty(name="Show estimated radius", default=True)
+    chain_angle: BoolProperty(name="Show estimated angle", default=True)
+    chain_auto_trim: BoolProperty(name="Detect connectors", default=True,
+                                  update=update_arc_chain_selection)
+    chain_trim_start: IntProperty(name="Additional start edges to exclude", min=0, max=100, default=0,
+                                  update=update_arc_chain_selection)
+    chain_trim_end: IntProperty(name="Additional end edges to exclude", min=0, max=100, default=0,
+                                update=update_arc_chain_selection)
 
     glarc_a: EnumProperty(items=(('99', "--", "No arrow"),
                                   ('1', "Line", "The point of the arrow are lines"),
@@ -523,6 +630,31 @@ def add_item(box, idx, segment):
         row.prop(segment, 'glfontx', text="X")
         row.prop(segment, 'glfonty', text="Y")
 
+        if segment.gltype == 21:
+            is_editing = bpy.context.mode == 'EDIT_MESH'
+            row = box.row(align=True)
+            row.enabled = is_editing and not bpy.context.tool_settings.mesh_select_mode[2]
+            row.prop(segment, 'chain_select_edges', text="Select all edges included", toggle=True)
+            row = box.row(align=True)
+            row.enabled = is_editing
+            row.prop(segment, 'chain_auto_trim')
+            row = box.row(align=True)
+            row.enabled = is_editing
+            row.label(text="Linear segment length")
+            if segment.chain_auto_trim:
+                row.prop(segment, 'chain_mode', text="")
+            else:
+                sub = row.row(align=True)
+                sub.enabled = False
+                sub.label(text="All segments")
+            row = box.row(align=True)
+            row.prop(segment, 'chain_radius')
+            row.prop(segment, 'chain_angle')
+            row = box.row(align=True)
+            row.enabled = is_editing and segment.chain_auto_trim
+            row.prop(segment, 'chain_trim_start')
+            row.prop(segment, 'chain_trim_end')
+
         # Arrows
         if segment.gltype != 9 and segment.gltype != 10 and segment.gltype != 20:
             row = box.row(align=True)
@@ -630,6 +762,8 @@ class MEASUREIT_PT_Main(Panel):
 
         row.operator("measureit.runopengl", text=txt, icon=icon)
         row.prop(scene, "measureit_gl_ghost", text="", icon='GHOST_ENABLED')
+        if context.window_manager.measureit_run_opengl is False:
+            box.label(text="Viewport measures are off: press Show", icon='INFO')
 
         # Tools
         box = layout.box()
@@ -650,6 +784,7 @@ class MEASUREIT_PT_Main(Panel):
         row = box.row()
         row.operator("measureit.addangle", text="Angle", icon="LINCURVE")
         row.operator("measureit.addarc", text="Arc")
+        row.operator("measureit.addarcchain", text="Arc Chain")
 
         row = box.row()
         row.operator("measureit.addlabel", text="Label", icon="FONT_DATA")
@@ -927,6 +1062,122 @@ class MEASUREIT_OT_AddSegment(Operator):
 # Defines button that adds an area measure
 #
 # -------------------------------------------------------------
+class MEASUREIT_OT_AddArcChain(Operator):
+    bl_idname = "measureit.addarcchain"
+    bl_label = "Arc Chain"
+    bl_description = "Measure an edge chain, or detect the arc from one selected edge or vertex"
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH' and context.mode == 'EDIT_MESH'
+
+    def execute(self, context):
+        obj = context.object
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.verts.ensure_lookup_table()
+        bm.verts.index_update()
+        edges = [edge for edge in bm.edges if edge.select]
+        selected_vertices = [v for v in bm.verts if v.select]
+
+        # A single seed edge or vertex grows in both directions along the
+        # boundary, stopping at sharp corners leading into straight sides.
+        if len(edges) == 1 or (len(edges) == 0 and len(selected_vertices) == 1):
+            def neighbors(vertex):
+                boundary = [e for e in vertex.link_edges if len(e.link_faces) <= 1]
+                return boundary if boundary else list(vertex.link_edges)
+
+            def grow(previous, current):
+                result = []
+                visited = {previous.index, current.index}
+                for _ in range(len(bm.verts)):
+                    choices = []
+                    for edge in neighbors(current):
+                        nxt = edge.other_vert(current)
+                        if nxt.index in visited:
+                            continue
+                        incoming = previous.co - current.co
+                        outgoing = nxt.co - current.co
+                        if incoming.length < 1e-10 or outgoing.length < 1e-10:
+                            continue
+                        turn = 180.0 - degrees(incoming.angle(outgoing))
+                        choices.append((turn, nxt.index, nxt))
+                    if not choices:
+                        break
+                    turn, _, nxt = min(choices, key=lambda item: (item[0], item[1]))
+                    if turn > 40.0:
+                        break
+                    result.append(nxt)
+                    visited.add(nxt.index)
+                    previous, current = current, nxt
+                return result
+
+            if len(edges) == 1:
+                first, second = edges[0].verts
+            else:
+                center = selected_vertices[0]
+                candidates = [e.other_vert(center) for e in neighbors(center)]
+                if len(candidates) != 2:
+                    self.report({'ERROR'}, "Select an arc edge, or an interior vertex with two boundary neighbors")
+                    return {'CANCELLED'}
+                first, second = candidates
+                # The central vertex belongs between both directions.
+                seed_middle = center
+
+            if len(edges) == 1:
+                chain_verts = list(reversed(grow(second, first))) + [first, second] + grow(first, second)
+            else:
+                chain_verts = list(reversed(grow(seed_middle, first))) + [first, seed_middle, second] + grow(seed_middle, second)
+            if len(chain_verts) < 3:
+                self.report({'ERROR'}, "Could not detect an arc chain from this selection")
+                return {'CANCELLED'}
+            order = [v.index for v in chain_verts]
+            # Do not change the user's selection until the explicit selection
+            # toggle is enabled in the item's options.
+        else:
+            order = None
+
+        if order is None:
+            adjacency = {}
+            for edge in edges:
+                a, b = (v.index for v in edge.verts)
+                adjacency.setdefault(a, []).append(b)
+                adjacency.setdefault(b, []).append(a)
+            ends = [i for i, adjacent in adjacency.items() if len(adjacent) == 1]
+            if len(ends) != 2 or any(len(n) > 2 for n in adjacency.values()):
+                self.report({'ERROR'}, "Select one connected open edge chain without branches")
+                return {'CANCELLED'}
+            order = [min(ends)]
+            previous = None
+            while True:
+                candidates = [v for v in adjacency[order[-1]] if v != previous]
+                if not candidates:
+                    break
+                previous = order[-1]
+                order.append(candidates[0])
+                if len(order) > len(adjacency):
+                    break
+            if len(order) != len(adjacency) or order[-1] not in ends:
+                self.report({'ERROR'}, "Selected edges do not form a continuous chain")
+                return {'CANCELLED'}
+        if not hasattr(obj, "MeasureGenerator") or len(obj.MeasureGenerator) == 0:
+            obj.MeasureGenerator.add()
+        mp = obj.MeasureGenerator[0]
+        ms = mp.measureit_segments.add()
+        ms.gltype = 21
+        for index in order:
+            ms.chain_indices.add().glidx = index
+        scene = context.scene
+        ms.glcolor = scene.measureit_default_color
+        ms.glfont_size = scene.measureit_font_size
+        ms.glfont_align = scene.measureit_font_align
+        ms.glfont_rotat = scene.measureit_font_rotation
+        ms.gltxt = scene.measureit_gl_txt
+        mp.measureit_num = len(mp.measureit_segments)
+        if context.area is not None:
+            context.area.tag_redraw()
+        return {'FINISHED'}
+
+
 class MEASUREIT_OT_AddArea(Operator):
     bl_idname = "measureit.addarea"
     bl_label = "Area"
