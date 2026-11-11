@@ -1,6 +1,6 @@
 # MeasureIt Clean Viewport
 
-A small compatibility variant of the Blender add-on **MeasureIt** (Blender 5.0+).
+A fork of the Blender add-on **MeasureIt** (Blender 5.0+) with zoom-proportional viewport text, an arc chain tool and collection-based area totals with viewport highlighting.
 
 - Original project: https://projects.blender.org/extensions/measureit
 - Original author: Antonio Vazquez (antonioya), copyright 2024. GPL-3.0-or-later, and so is this variant.
