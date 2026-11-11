@@ -15,6 +15,8 @@ A small compatibility variant of the Blender add-on **MeasureIt** (Blender 5.0+)
 - **Text placement (1.9.x)** - measure text sits on the outer side of its line with a small gap, for Left/Center/Right alignment and for dimensions, labels, angles, arcs, annotations and areas. Area text is centered on the area.
 - **New defaults (1.9.x)** - white text color, Center alignment, distance 0.05.
 - **Arc chain tool and text options (1.9.27)** - measures a chain of edges with estimated radius and angle (selection of the included edges, connector detection, start/end exclusion), line spacing for multi-line text and a name field. Developed with ChatGPT.
+- **Collection-based area totals (1.9.28)** - sum visible Area measurements from separate Room and Wall collections, respecting the current View Layer. Expand the details to see included and excluded measurements.
+- **Highlight counted areas (1.9.30)** - temporarily dim the viewport and draw thick green perimeters labeled with their Outliner object names. Selection and editing are blocked while inspecting; Esc exits, and zoom/pan remain available.
 
 The add-on id is `measureit_clean_viewport`, different from upstream's `measureit`, so both can be installed side by side (do not enable both at the same time).
 

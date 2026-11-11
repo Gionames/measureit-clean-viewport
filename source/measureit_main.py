@@ -21,6 +21,7 @@ from bpy.app.handlers import persistent
 # noinspection PyUnresolvedReferences
 from .measureit_geometry import *
 from .measureit_render import *
+from .measureit_area_totals import draw_area_totals
 
 
 # ------------------------------------------------------
@@ -425,17 +426,8 @@ class MEASUREIT_PT_Edit(Panel):
     # -----------------------------------------------------
     @classmethod
     def poll(cls, context):
-        mainobject = context.object
-        if mainobject is None:
-            return False
-        if not hasattr(mainobject, "MeasureGenerator") or len(mainobject.MeasureGenerator) == 0:
-            return False
-        else:
-            mp = mainobject.MeasureGenerator[0]
-            if mp.measureit_num > 0:
-                return True
-            else:
-                return False
+        # Area Totals are scene-wide, even when the selected object has no measures.
+        return context.scene is not None
 
     # -----------------------------------------------------
     # Draw (create UI interface)
@@ -592,6 +584,9 @@ class MEASUREIT_PT_Edit(Panel):
                         # delete all
                         row = box.row()
                         row.operator("measureit.deleteallsum", text="Delete all", icon="X")
+
+        # At the bottom of Items, regardless of the active object.
+        draw_area_totals(layout, context)
 
 
 # -----------------------------------------------------

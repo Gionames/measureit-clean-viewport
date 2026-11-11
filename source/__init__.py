@@ -32,9 +32,11 @@ from bpy.props import (
         StringProperty,
         FloatProperty,
         EnumProperty,
+        PointerProperty,
         )
 
 from .measureit_sum_edge_lengths import *
+from .measureit_highlight import MEASUREIT_OT_HighlightCountedAreas
 
 # --------------------------------------------------------------
 # Register all operators and panels
@@ -91,6 +93,7 @@ class Measure_Pref(AddonPreferences):
 # Define menu
 # noinspection PyUnusedLocal
 classes = (
+    MEASUREIT_OT_HighlightCountedAreas,
     measureit_main.MEASUREIT_OT_RunHintDisplay,
     measureit_main.MEASUREIT_OT_AddSegment,
     measureit_main.MEASUREIT_OT_AddArea,
@@ -120,6 +123,15 @@ def register():
     from bpy.utils import register_class
     for cls in classes:
         register_class(cls)
+
+    WindowManager.measureit_area_highlight_active = BoolProperty(
+        name='Highlight counted areas active', default=False, options={'SKIP_SAVE'})
+
+    Scene.measureit_room_collection = PointerProperty(name='Room surfaces collection', type=bpy.types.Collection)
+    Scene.measureit_wall_collection = PointerProperty(name='Wall surfaces collection', type=bpy.types.Collection)
+    Scene.measureit_area_totals_open = BoolProperty(name='Area Totals', default=True)
+    Scene.measureit_room_details = BoolProperty(name='Room surface details', default=False)
+    Scene.measureit_wall_details = BoolProperty(name='Wall surface details', default=False)
 
     # Define properties
     Scene.measureit_default_color = FloatVectorProperty(
@@ -417,6 +429,13 @@ def unregister():
     from bpy.utils import unregister_class
     for cls in reversed(classes):
         unregister_class(cls)
+
+    del Scene.measureit_room_collection
+    del Scene.measureit_wall_collection
+    del Scene.measureit_area_totals_open
+    del Scene.measureit_room_details
+    del Scene.measureit_wall_details
+    del WindowManager.measureit_area_highlight_active
 
     # Remove properties
     del Scene.measureit_default_color
