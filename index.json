@@ -1,0 +1,29 @@
+{
+  "version": "v1",
+  "blocklist": [],
+  "data": [
+    {
+      "schema_version": "1.0.0",
+      "id": "measureit_clean_viewport",
+      "name": "MeasureIt Clean Viewport",
+      "version": "1.9.27",
+      "tagline": "MeasureIt with opaque-safe, text-only and zoom-scaled viewport labels",
+      "maintainer": "Local compatibility variant",
+      "type": "add-on",
+      "tags": [
+        "3D View"
+      ],
+      "blender_version_min": "5.0.0",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "website": "https://projects.blender.org/extensions/measureit",
+      "copyright": [
+        "2024 Antonio Vazquez (antonioya)"
+      ],
+      "archive_url": "https://github.com/Gionames/measureit-clean-viewport/releases/download/v1.9.27/measureit_clean_viewport-1.9.27.zip",
+      "archive_size": 214211,
+      "archive_hash": "sha256:6fe2a2562358274f67e3378ba4bbeb54c527a82ec734e8aa5766d2365d66bee6"
+    }
+  ]
+}
