@@ -6,8 +6,8 @@
       "schema_version": "1.0.0",
       "id": "measureit_clean_viewport",
       "name": "MeasureIt Clean Viewport",
-      "version": "1.9.27",
-      "tagline": "MeasureIt with opaque-safe, text-only and zoom-scaled viewport labels",
+      "version": "1.9.30",
+      "tagline": "Clean viewport measurement and area totals",
       "maintainer": "Local compatibility variant",
       "type": "add-on",
       "tags": [
@@ -21,9 +21,9 @@
       "copyright": [
         "2024 Antonio Vazquez (antonioya)"
       ],
-      "archive_url": "https://github.com/Gionames/measureit-clean-viewport/releases/download/v1.9.27/measureit_clean_viewport-1.9.27.zip",
-      "archive_size": 214211,
-      "archive_hash": "sha256:6fe2a2562358274f67e3378ba4bbeb54c527a82ec734e8aa5766d2365d66bee6"
+      "archive_url": "https://raw.githubusercontent.com/Gionames/measureit-clean-viewport/main/packages/measureit_clean_viewport-1.9.30.zip",
+      "archive_size": 41813,
+      "archive_hash": "sha256:3df8916f3179496504d02bb3f5f8e44026dce1db306ea5fd300ee2d3abee54a8"
     }
   ]
 }
